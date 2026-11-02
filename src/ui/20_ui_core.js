@@ -185,7 +185,8 @@ function renderModalRoot() {
     if (!m) UI.modal = UI.mq.shift() || null;
   }
   if (!m) { root.innerHTML = ''; document.body.style.overflow = ''; return; }
-  root.innerHTML = `<div class="mback" data-a="mback"><div class="modal ${m.size || ''}" role="dialog" aria-modal="true" aria-label="${esc(m.title)}"><div class="modal-h"><h3>${m.title}</h3><button class="x" data-a="closeModal" aria-label="閉じる">×</button></div><div class="modal-b">${m.body}</div>${m.foot ? `<div class="modal-f">${m.foot}</div>` : ''}</div></div>`;
+  const same = UI.lastModal === UI.modal; UI.lastModal = UI.modal;
+  root.innerHTML = `<div class="mback" data-a="mback"><div class="modal ${m.size || ''}${same ? ' still' : ''}" role="dialog" aria-modal="true" aria-label="${esc(m.title)}"><div class="modal-h"><h3>${m.title}</h3><button class="x" data-a="closeModal" aria-label="閉じる">×</button></div><div class="modal-b">${m.body}</div>${m.foot ? `<div class="modal-f">${m.foot}</div>` : ''}</div></div>`;
   document.body.style.overflow = 'hidden';
 }
 ACT.closeModal = () => { closeModal(); render(); };
@@ -223,4 +224,11 @@ document.addEventListener('input', e => {
   const el = e.target.closest('[data-i]'); if (!el) return;
   const fn = ACT[el.dataset.i]; if (fn) fn(el, e);
 });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && UI.modal) { closeModal(); render(); } });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && UI.modal) { closeModal(); render(); return; }
+  /* 図の中の押せる部分（role="button"）は Enter／スペースでも押せる */
+  const el = e.target;
+  if ((e.key === 'Enter' || e.key === ' ') && el && el.matches && el.matches('[role="button"][data-a]') && !/^(BUTTON|A|INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) {
+    e.preventDefault(); const fn = ACT[el.dataset.a]; if (fn) { try { fn(el, e); } catch (err) { console.error(err); } }
+  }
+});

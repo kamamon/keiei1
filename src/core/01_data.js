@@ -218,13 +218,24 @@ const POLICIES = {
   profit: { n: '収益重視', d: '営業収入が増え経費が下がるが、人気は伸びにくい', budget: 0.9, rev: 1.05 }
 };
 
+/* スポンサー枠。cat: uni＝ユニフォーム・パートナー、stad＝球場内広告（球場を借りていると取り分は6割）
+   x：値段を左右するもの（tv＝中継への映り、vision＝大型ビジョンの水準、att＝観客数、cap＝席数、town＝街の賑わい） */
 const SPONSOR_SLOTS = {
-  chest: { n: 'ユニフォーム胸', base: 30000 },
-  sleeve: { n: 'ユニフォーム袖', base: 12000 },
-  helmet: { n: 'ヘルメット', base: 6000 },
-  fence: { n: '外野フェンス看板', base: 15000 },
-  partner1: { n: 'オフィシャルパートナーA', base: 8000 },
-  partner2: { n: 'オフィシャルパートナーB', base: 8000 }
+  chest: { n: 'ユニフォーム胸', base: 30000, cat: 'uni', d: 'いちばん目立つ広告。中継・写真・グッズにも載る' },
+  sleeve: { n: 'ユニフォーム袖', base: 12000, cat: 'uni', d: '胸の次に目立つ' },
+  helmet: { n: 'ヘルメット', base: 6000, cat: 'uni', d: '打席のたびに大きく映る' },
+  partner1: { n: 'オフィシャルパートナーA', base: 8000, cat: 'uni', d: '球団ロゴを自社の広告に使える協賛契約' },
+  partner2: { n: 'オフィシャルパートナーB', base: 8000, cat: 'uni', d: '球団ロゴを自社の広告に使える協賛契約' },
+  backnet: { n: 'バックネット裏LED', base: 16000, cat: 'stad', x: 'tv', d: '投球のたびに中継に映る一等地' },
+  fence: { n: '外野フェンス看板', base: 15000, cat: 'stad', x: 'tv', d: 'ホームランや好守のたびに映る' },
+  score: { n: 'スコアボード看板', base: 9000, cat: 'stad', x: 'tv', d: '球場のどこからでも見える' },
+  vision: { n: '大型ビジョンCM枠', base: 7000, cat: 'stad', x: 'vision', req: { vision: 1 }, d: 'イニング間にCMを流す。ビジョンの水準が高いほど高く売れる' },
+  ribbon: { n: 'リボンビジョン', base: 7000, cat: 'stad', x: 'vision', req: { vision: 3 }, d: '内野席に沿った帯状のビジョン。大型ビジョンLv3から設置できる' },
+  bench: { n: 'ダッグアウト上看板', base: 5000, cat: 'stad', x: 'tv', d: 'ベンチの選手と一緒に映る' },
+  pole: { n: 'ファウルポール看板', base: 3500, cat: 'stad', x: 'tv', d: '打球がポール際に飛ぶたびに注目される' },
+  concourse: { n: 'コンコース看板・のぼり', base: 2500, cat: 'stad', x: 'att', d: '観客が多いほど高く売れる' },
+  seat: { n: '座席・カップホルダー広告', base: 2000, cat: 'stad', x: 'cap', d: '席数が多いほど高く売れる' },
+  wall: { n: '球場外壁の大型看板', base: 3000, cat: 'stad', x: 'town', d: '街の人通りが多いほど高く売れる' }
 };
 const COMPANIES = ['ミライネット', 'ソラノ銀行', 'ハルカ製薬', 'カザミ自動車', 'トキワ電機', 'ヒカリ住建', 'ニシキ証券', 'コハク化粧品',
   'ツバサ航空', 'マツリ食品', 'イナホ酒造', 'シオサイ保険', 'ルミナス電工', 'ネクサス通信', 'アルタイル生命', 'シリウス証券',
@@ -243,7 +254,7 @@ const FC_TIERS = {
 };
 
 const REV_CATS = { ticket: '入場料', food: '飲食', goods: 'グッズ', tv: '放映権', sponsor: 'スポンサー', naming: 'ネーミングライツ',
-  fanclub: 'ファンクラブ', town: '街・不動産', farm: '2軍・その他', prize: '賞金・分配金', transfer: '移籍金', subsidy: '親会社の支援' };
+  fanclub: 'ファンクラブ', stadad: '球場内広告', town: '街・不動産', farm: '2軍・その他', prize: '賞金・分配金', transfer: '移籍金', subsidy: '親会社の支援' };
 const EXP_CATS = { payroll: '選手年俸', staff: 'スタッフ人件費', rent: '球場使用料', ops: '試合運営費', travel: '遠征費', maint: '設備維持費',
   ads: '広告宣伝費', promo: 'イベント費', scout: 'スカウト費', dev: '育成費', sales: '営業費', camp: 'キャンプ費', capex: '設備投資',
   land: '土地取得', bonus: '契約金', transfer: '移籍金', interest: '支払利息', fc: 'ファンクラブ特典', townev: '街のイベント費', tax: '法人税等', other: 'その他' };
