@@ -197,7 +197,7 @@ SCREENS.town = () => {
   const nEv = (tw.events || []).length;
   const stg = townStage();
   const head = `<h1 class="h1">街づくり</h1><p class="lead">球場の周りに街をつくり、観客が来やすく、試合がない日も人が集まる「ボールパーク」を目指します。イベントで人を呼ぶと、空いている土地に民間の店や住宅が建ち、街が自然に育っていきます。</p>
-  <div class="panel" style="margin-bottom:16px">${tiles([['街の段階', stg.n, '段階 ' + stg.i + '／' + TOWN_STAGES.length, 'txt'], ['アクセス', st.acc], ['賑わい', st.vib, st.evVib ? `うちイベント +${st.evVib}` : ''], ['住民', fmtPeople(Math.round(st.pop))], ['地域の愛着', Math.round(tw.attach)], ['発展の勢い', Math.round(tw.dev || 0), (tw.dev || 0) >= DEV_START ? '民間の開発が進行中' : DEV_START + 'で民間の開発が始まる'], ['地価', '×' + tw.landIdx.toFixed(2)], ['街の収入', fmtOku(townWeeklyRevenue(curTurn() >= 11 && curTurn() <= 38)) + '／週']])}</div>
+  <div class="panel" style="margin-bottom:16px">${tiles([['街の段階', stg.n, `段階 ${stg.i}／${stg.max}`, 'txt'], ['アクセス', st.acc], ['賑わい', st.vib, st.vib !== st.vibBase ? `いつもの賑わい ${st.vibBase}` : ''], ['住民', fmtPeople(Math.round(st.pop))], ['地域の愛着', Math.round(tw.attach)], ['発展の勢い', Math.round(tw.dev || 0), (tw.dev || 0) >= DEV_START ? '民間の開発が進行中' : DEV_START + 'で民間の開発が始まる'], ['地価', '×' + tw.landIdx.toFixed(2)], ['街の収入', fmtOku(townWeeklyRevenue(curTurn() >= 11 && curTurn() <= 38)) + '／週']])}</div>
   ${tabs('town', [['map', '区画と建物'], ['ev', '街のイベント', nEv || null]], tab)}`;
   return head + (tab === 'ev' ? townEventsView() : townMapView());
 };
@@ -213,7 +213,7 @@ function townMapView() {
     else { ic = c.own ? '<span style="color:var(--lamp)">＋</span>' : ''; lb = c.own ? '空き地' : '売地 ' + fmtOku(landPrice(c)).replace('円', ''); }
     return `<button class="cell ${cls} ${UI.sel.cell === i ? 'sel' : ''}" data-a="cell" data-i="${i}" aria-label="${esc(lb)}">${c.b && c.b.lv > 1 ? `<span class="lvb">Lv${c.b.lv}</span>` : ''}<span class="ic">${ic}</span><span class="lb">${esc(lb)}</span></button>`;
   }).join('');
-  let side = '<p class="muted">区画を選ぶと、土地の購入や建物の建設ができます。球場の周り（隣接8マス）は飲食や商業の効果が2割増しです。</p><p class="small muted">「民」の印は、街の発展で民間が建てた建物です。賑わいや住民を増やしてくれます。</p>';
+  let side = null;
   if (sel) {
     if (sel.sp === 'stadium') side = `<p><b>${esc(stadiumName())}</b></p><button class="btn" data-a="go" data-v="stadium">球場・設備へ</button>`;
     else if (sel.sp === 'station') side = '<p>既存の最寄り駅です。駅からのアクセスは「シャトルバス乗り場」や「新駅」で改善できます。</p>';
@@ -233,7 +233,22 @@ function townMapView() {
       side = `<p class="small muted">球団の空き地です。建てる施設を選んでください。${nearStadium(sel) ? '<b>球場隣接のため飲食・商業の効果が2割増し。</b>' : ''}</p><div class="lot">${Object.entries(BLD).map(([k, d]) => { const c = canBuild(sel, k); return `<div class="lot-row"><span style="font-size:22px">${d.i}</span><div style="flex:1"><b>${d.n}</b> <span class="small muted">${fmtOku(d.cost)}・${d.wk}週・維持${fmtOku(d.maint)}/週</span><div class="small muted">${d.d}</div>${bldEffects(d, 1)}</div><button class="btn sm pri" data-a="bld" data-k="${k}" ${c.ok ? '' : `disabled title="${esc(c.why)}"`}>建てる</button></div>`; }).join('')}</div>`;
     }
   }
-  return `<div class="grid g2"><div class="panel"><div class="panel-b"><div class="town">${grid}</div></div></div>${panel(sel ? '選んだ区画' : '区画の操作', side)}</div>`;
+  const hint = '<p class="small muted" style="margin:10px 0 0">区画を選ぶと、土地の購入や建物の建設ができます（もう一度押すと選択を外します）。球場の周り（隣接8マス）は飲食や商業の効果が2割増し。「民」の印は、街の発展で民間が建てた建物です。</p>';
+  return `<div class="grid g2"><div class="panel"><div class="panel-b"><div class="town">${grid}</div>${hint}</div></div>${side ? panel('選んだ区画', side, { act: '<button class="btn sm" data-a="cellOff">選択を外す</button>' }) : panel('街の段階', townStageLadder())}</div>`;
+}
+/* 10段階の一覧。上ほど発展した姿 */
+function townStageLadder() {
+  const tw = G.town; const s = townStage(); const log = tw.stageLog || []; const top = Math.max(tw.stageMax || 0, s.i);
+  const rows = TOWN_STAGES.map(([t, n], k) => {
+    const i = k + 1; const at = log.find(l => l.i === i);
+    const cls = i === s.i ? 'cur' : i <= top ? 'done' : '';
+    const note = i === s.i ? 'いま' : at ? `${at.y}年${at.m}月` : i <= top ? '到達' : `賑わい${t}`;
+    return `<li class="${cls}"><span class="no">${i}</span><span class="nm">${n}</span><span class="th">${note}</span></li>`;
+  }).reverse().join('');
+  const prog = s.next != null
+    ? `<p class="small" style="margin:0 0 6px">次の「${s.nextN}」まで、いつもの賑わいがあと <b>${Math.max(1, s.next - Math.floor(s.v))}</b></p>${bar(s.v - s.cur, s.next - s.cur)}`
+    : '<p class="small" style="margin:0">最後の段階に到達しました。</p>';
+  return `${prog}<ol class="ladder">${rows}</ol><p class="small muted" style="margin:10px 0 0">段階は、建物と民間の店でできた「いつもの賑わい」で決まります（イベント中の上乗せは含みません）。新しい段階に届くたびに、地域の愛着・人気・ファンが少し増えます。</p>`;
 }
 function evEffects(d, m) {
   const out = [];
@@ -251,7 +266,8 @@ function townEventsView() {
   const running = evs.length ? `<div class="lot">${evs.map(e => { const d = TOWN_EVENTS[e.k]; return `<div class="lot-row"><span style="font-size:22px">${d.i}</span><div style="flex:1;min-width:160px"><b>${d.n}</b> <span class="small muted">残り${e.wk}週</span>${bar(e.tot - e.wk, e.tot)}</div></div>`; }).join('')}</div>`
     : '<p class="muted" style="margin:0">いま開いているイベントはありません。下の一覧から開催できます（同時に2つまで）。</p>';
   const dev = tw.dev || 0;
-  const devHtml = `${bar(dev, DEV_MAX, '', DEV_START)}<p class="small muted" style="margin:6px 0 0">勢いが${DEV_START}を超えると、空いている民有地に民間の店や住宅が建ち始めます。勢いはイベントや街の賑わいでたまり、建物が1つ建つたびに使われます。今年のイベント来場者：<b>${fmtPeople(tw.visitY || 0)}</b></p>`;
+  const sg = townStage();
+  const devHtml = `${bar(dev, DEV_MAX, '', DEV_START)}<p class="small" style="margin:8px 0 0">街の段階：<b>${sg.n}</b>（${sg.i}／${sg.max}）${sg.next != null ? `。次の「${sg.nextN}」まで、いつもの賑わいがあと${Math.max(1, sg.next - Math.floor(sg.v))}` : ''}</p><p class="small muted" style="margin:6px 0 0">勢いが${DEV_START}を超えると、空いている民有地に民間の店や住宅が建ち始めます。勢いはイベントや街の賑わいでたまり、建物が1つ建つたびに使われます。今年のイベント来場者：<b>${fmtPeople(tw.visitY || 0)}</b></p>`;
   const list = Object.entries(TOWN_EVENTS).map(([k, d]) => {
     const c = eventCanHost(k); const m = eventMult(k); const on = evs.some(e => e.k === k);
     const when = [d.months ? d.months.join('・') + '月' : '通年', d.off ? 'オフ限定' : '', `${d.wk}週間`].filter(Boolean).join('・');
@@ -261,7 +277,7 @@ function townEventsView() {
   const log = (tw.evLog || []).slice(0, 8);
   const logHtml = log.length ? `<ul class="tasks">${log.map(l => `<li><span>${TOWN_EVENTS[l.k].i} ${TOWN_EVENTS[l.k].n}</span><span class="small muted">${l.y}年${l.m}月・約${fmtPeople(l.visit)}</span></li>`).join('')}</ul>` : '<p class="muted" style="margin:0">まだ開催していません。</p>';
   return `<div class="grid g2 evgrid"><div class="stack">${panel('開催できるイベント', `<div class="lot">${list}</div>`)}</div>
-    <div class="stack">${panel('開催中', running)}${panel('発展の勢い', devHtml)}${panel('これまでのイベント', logHtml, { flush: !!log.length })}</div></div>`;
+    <div class="stack">${panel('開催中', running)}${panel('発展の勢いと街の段階', devHtml)}${panel('これまでのイベント', logHtml, { flush: !!log.length })}</div></div>`;
 }
 function bldEffects(d, m) {
   const L = { acc: 'アクセス', vib: '賑わい', pop: '住民', attach: '地域の愛着', fans: 'ファン', food: '飲食売上', goods: 'グッズ売上', heal: '故障回復', sat: '満足度', popw: '人気' };
@@ -273,7 +289,8 @@ function bldEffects(d, m) {
   if (d.academy) out.push('地元の有望株が増える');
   return `<div class="small" style="color:var(--ball)">${out.join('　')}</div>`;
 }
-ACT.cell = el => { UI.sel.cell = +el.dataset.i; render(); };
+ACT.cell = el => { const i = +el.dataset.i; UI.sel.cell = UI.sel.cell === i ? null : i; render(); };
+ACT.cellOff = () => { UI.sel.cell = null; render(); };
 ACT.buyLand = () => { const c = G.town.cells[UI.sel.cell]; if (buyLand(c)) toast('土地を購入しました', 'good'); render(); };
 ACT.bld = el => { const c = G.town.cells[UI.sel.cell]; const r = build(c, el.dataset.k); if (r.ok) toast('建設を始めました', 'good'); else toast(r.why, 'bad'); render(); };
 ACT.bldUp = () => { const c = G.town.cells[UI.sel.cell]; if (upgradeBld(c)) toast('拡張工事を始めました', 'good'); render(); };
