@@ -24,19 +24,23 @@ const ART = {
   ev_xmas: { alt: 'イルミネーション', tone: 'ice' }
 };
 /* その場面の画像がなければ、近い場面の画像を使う（or） */
+/* 場面の絵：イラスト（コードで描く）か、写真（Canva で作ったもの。ない場面はイラスト） */
+function artMode() { try { if (G && G.user && G.user.artMode) return G.user.artMode; return localStorage.getItem('kyudan_art') || 'il'; } catch (e) { return 'il'; } }
 function artSrc(k) {
   if (typeof ART_FILES === 'undefined') return '';
   if (ART_FILES[k]) return ART_FILES[k];
   for (const o of ((ART[k] && ART[k].or) || [])) if (ART_FILES[o]) return ART_FILES[o];
   return '';
 }
-function hasArt(k) { return !!artSrc(k); }
+function hasArt(k) { return !!(typeof IL_SCENES !== 'undefined' && IL_SCENES[k]) || !!artSrc(k); }
+function artPhoto(k) { return artMode() === 'photo' ? artSrc(k) : ''; }
 /* 場面の画像。o.h＝高さのクラス（banner／cut／thumb）、o.title・o.sub＝画像の上に重ねる文字 */
 function art(k, o) {
-  o = o || {}; const a = ART[k] || { alt: '', tone: 'night' }; const src = artSrc(k);
+  o = o || {}; const a = ART[k] || { alt: '', tone: 'night' }; const src = artPhoto(k); const il = src ? '' : ilScene(k);
   const tt = o.h1 ? 'h1' : 'span';
   const txt = o.title || o.sub ? `<figcaption>${o.kicker ? `<span class="k">${o.kicker}</span>` : ''}${o.title ? `<${tt} class="t">${o.title}</${tt}>` : ''}${o.sub ? `<span class="s">${o.sub}</span>` : ''}</figcaption>` : '';
-  return `<figure class="art ${o.h || 'banner'} tone-${a.tone}${src ? ' has' : ''} ${o.cls || ''}">${src ? `<img src="${src}" alt="${esc(a.alt)}" decoding="async"${o.eager ? '' : ' loading="lazy"'} onerror="this.parentNode.classList.remove('has');this.remove()">` : ''}${txt}</figure>`;
+  const media = src ? `<img src="${src}" alt="${esc(a.alt)}" decoding="async"${o.eager ? '' : ' loading="lazy"'} onerror="this.parentNode.classList.remove('has');this.remove()">` : il ? `<div class="ilw" role="img" aria-label="${esc(a.alt)}">${il}</div>` : '';
+  return `<figure class="art ${o.h || 'banner'} tone-${a.tone}${media ? ' has' : ''} ${o.cls || ''}">${media}${txt}</figure>`;
 }
 /* いまの時期の場面 */
 function phaseArt(t) {

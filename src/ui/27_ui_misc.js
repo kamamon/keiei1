@@ -49,6 +49,7 @@ SCREENS.system = () => {
     ${panel('セーブデータ', `<div class="tw"><table class="t compact"><tbody>${rows}</tbody></table></div><p class="small muted" style="padding:0 14px">毎週の進行時にオートセーブされます。データはこのブラウザの中だけに保存されます。</p>`, { flush: true })}
     ${panel('ファイルで保存・引き継ぎ', `<p class="small">別の端末やブラウザで続きを遊ぶときは、ファイルに書き出して読み込みます。</p><div class="row"><button class="btn pri" data-a="sysExport">ファイルに書き出す</button><label class="btn" style="cursor:pointer">ファイルから読み込む<input type="file" accept=".kyudan,.json,.txt" data-c="importFile" hidden></label></div>`)}
     ${panel('表示と進行', `<div class="field"><span>画面のテーマ</span>${seg('sysTheme', [['night', 'ナイター（暗い）'], ['day', 'デーゲーム（明るい）']], th)}</div>
+      <div class="field" style="margin-top:10px"><span>場面の絵</span>${seg('sysArt', [['il', 'イラスト'], ['photo', '写真（Canva）']], artMode())}<span class="small muted">写真は Canva で作った場面だけです。写真のない場面はイラストで表示します。</span></div>
       <div class="stack" style="margin-top:12px"><label class="chk"><input type="checkbox" data-c="setUser" data-k="showWeekly" ${G.user.showWeekly ? 'checked' : ''}>毎週のまとめを表示する</label>
       <label class="chk"><input type="checkbox" data-c="setUser" data-k="autoSwap" ${G.user.autoSwap ? 'checked' : ''}>1軍の故障者を自動で入れ替える</label>
       <label class="chk"><input type="checkbox" data-c="setUser" data-k="autoRoster" ${G.user.autoRoster ? 'checked' : ''}>1軍の編成を毎週監督に任せる</label></div>`)}
@@ -66,6 +67,7 @@ ACT.sysExport = async () => {
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   toast('ファイルに書き出しました', 'good');
 };
+ACT.sysArt = el => { G.user.artMode = el.dataset.v; try { localStorage.setItem('kyudan_art', el.dataset.v); } catch (e) { } render(); };
 ACT.sysTheme = el => { G.user.theme = el.dataset.v; try { localStorage.setItem('kyudan_theme', el.dataset.v); } catch (e) { } render(); };
 ACT.toTitleAsk = () => { openModal('toTitle'); render(); };
 MODALS.toTitle = () => ({ title: 'タイトルに戻りますか', size: 'narrow', body: '<p>オートセーブ済みのデータは「続きから」で再開できます。</p>', foot: '<button class="btn" data-a="closeModal">やめる</button><button class="btn pri" data-a="toTitle">タイトルへ</button>' });

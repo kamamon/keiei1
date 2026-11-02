@@ -279,6 +279,36 @@ table.t.compact td { padding: 4px 6px; } table.t.compact th { padding: 5px 6px; 
 .art.tone-navy { --art-bg: radial-gradient(40% 80% at 70% 0%, rgba(160, 190, 255, .35), transparent 70%), linear-gradient(160deg, #081026 0%, #18295a 100%); }
 .art.tone-ice { --art-bg: radial-gradient(45% 80% at 80% 0%, rgba(255, 255, 255, .55), transparent 70%), linear-gradient(180deg, #5f88a6 0%, #a9c6da 60%, #d6e4ec 100%); }
 .art.tone-dusk { --art-bg: radial-gradient(40% 70% at 82% 100%, rgba(255, 190, 110, .55), transparent 70%), linear-gradient(180deg, #221c45 0%, #7a3f63 58%, #d98a55 100%); }
+/* イラスト（SVG） */
+.art .ilw, .title-il { position: absolute; inset: 0; z-index: -2; overflow: hidden; }
+.art .ilw svg, .title-il svg { display: block; width: 100%; height: 100%; }
+.title.art-il { position: relative; isolation: isolate; background: var(--bg); }
+.title-il { z-index: -1; }
+.title-il::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(4, 18, 12, .35), rgba(4, 18, 12, .82)); }
+.il .twk { animation: il-twk 3s ease-in-out infinite alternate; }
+.il .fall { animation: il-fall 8s linear infinite; }
+.il .burst { transform-box: fill-box; transform-origin: center; animation: il-burst 4s ease-out infinite; }
+.il .sway { transform-box: fill-box; transform-origin: 50% 0; animation: il-sway 3s ease-in-out infinite alternate; }
+.il .spin { animation: il-spin 60s linear infinite; }
+.il .beam { transform-box: fill-box; transform-origin: 50% 100%; animation: il-beam 6s ease-in-out infinite alternate; }
+.il .beamt { transform-box: fill-box; transform-origin: 50% 0; animation: il-beam 7s ease-in-out infinite alternate; }
+.il .glow { animation: il-glow 4s ease-in-out infinite alternate; }
+.il .wave { transform-box: fill-box; transform-origin: 50% 100%; animation: il-wave 1.6s ease-in-out infinite alternate; }
+.il .hop { animation: il-hop .9s ease-in-out infinite alternate; }
+.il .drift { animation: il-drift 60s ease-in-out infinite alternate; }
+.il .rise { animation: il-rise 4s ease-out infinite; }
+@keyframes il-twk { from { opacity: .2; } to { opacity: 1; } }
+@keyframes il-fall { from { transform: translateY(0); } to { transform: translateY(1000px); } }
+@keyframes il-burst { 0% { transform: scale(.05); opacity: 0; } 8% { opacity: 1; } 60% { opacity: .9; } 100% { transform: scale(1); opacity: 0; } }
+@keyframes il-sway { from { transform: rotate(-4deg); } to { transform: rotate(4deg); } }
+@keyframes il-spin { to { transform: rotate(360deg); } }
+@keyframes il-beam { from { transform: rotate(-10deg); } to { transform: rotate(10deg); } }
+@keyframes il-glow { from { opacity: .65; } to { opacity: 1; } }
+@keyframes il-wave { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
+@keyframes il-hop { from { transform: translateY(0); } to { transform: translateY(-26px); } }
+@keyframes il-drift { from { transform: translateX(-60px); } to { transform: translateX(60px); } }
+@keyframes il-rise { from { transform: translateY(0); opacity: .8; } to { transform: translateY(-120px); opacity: 0; } }
+.art.thumb .il * { animation: none !important; }
 .title.art-bg { background: linear-gradient(180deg, rgba(4, 18, 12, .55), rgba(4, 18, 12, .9)), var(--art) center / cover no-repeat, var(--bg); }
 .evrow.pic { grid-template-columns: 84px minmax(0, 1fr) auto; }
 @media (max-width: 860px) { .art figcaption { padding: 14px 16px; } .art .s { font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; } .art.cut { margin: -16px -18px 12px; } }

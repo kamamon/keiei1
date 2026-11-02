@@ -39,7 +39,8 @@ SCREENS.title = () => {
   if (s.step === 2) return titleSetup();
   if (s.step === 3) return titleLoad();
   if (s.step === 4) return titleCustom();
-  return `<div class="title${hasArt('title') ? ' art-bg' : ''}"${hasArt('title') ? ` style="--art:url('${artSrc('title')}')"` : ''}><div class="title-board">
+  const tp = artPhoto('title'), ti = tp ? '' : ilScene('title');
+  return `<div class="title${tp ? ' art-bg' : ti ? ' art-il' : ''}"${tp ? ` style="--art:url('${tp}')"` : ''}>${ti ? `<div class="title-il">${ti}</div>` : ''}<div class="title-board">
     <h1>球団社長</h1>
     <p>プロ野球経営シミュレーション</p>
     <div class="lamps"><span><i class="dot b"></i>補強</span><span><i class="dot s"></i>育成</span><span><i class="dot o"></i>経営</span></div>
