@@ -268,6 +268,35 @@ table.t.compact td { padding: 4px 6px; } table.t.compact th { padding: 5px 6px; 
 .cell.priv { border-style: solid; border-color: transparent; background: rgba(140, 160, 200, .10); }
 .cell.priv .lb { color: var(--ink3); }
 .cell.priv::after { content: "民"; position: absolute; top: 3px; left: 5px; font-size: 9.5px; color: var(--ink3); }
+/* ===== 場面の画像（Canva で生成） ===== */
+.art { position: relative; isolation: isolate; overflow: hidden; margin: 0 0 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--art-bg); }
+.art img { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; }
+.art::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(3, 16, 11, .88) 0%, rgba(3, 16, 11, .62) 42%, rgba(3, 16, 11, .12) 100%); }
+.art.banner { min-height: clamp(150px, 19vw, 220px); display: flex; align-items: flex-end; }
+.art.cut { margin: -16px -18px 14px; border: 0; border-radius: 0; min-height: clamp(150px, 34vw, 220px); display: flex; align-items: flex-end; }
+.art.cut::after { background: linear-gradient(0deg, rgba(3, 16, 11, .9) 0%, rgba(3, 16, 11, .45) 48%, rgba(3, 16, 11, .05) 100%); }
+.art.mini { margin: 0 0 10px; min-height: 120px; display: flex; align-items: flex-end; }
+.art.mini::after { background: linear-gradient(0deg, rgba(3, 16, 11, .85), rgba(3, 16, 11, .1) 70%); }
+.art.thumb { flex: none; width: 84px; height: 60px; margin: 0; border-radius: 5px; }
+.art.thumb::after { background: none; }
+.art figcaption { display: grid; gap: 4px; padding: 18px 22px; max-width: min(720px, 100%); color: #F4F7F1; }
+.art.cut figcaption, .art.mini figcaption { padding: 14px 18px; }
+.art .k { font-family: var(--f-num); font-size: 12px; color: #FFB547; letter-spacing: .04em; }
+.art .t { margin: 0; font-family: var(--f-disp); font-weight: 400; font-size: clamp(22px, 3vw, 32px); line-height: 1.2; text-shadow: 0 2px 14px rgba(0, 0, 0, .55); }
+.art.mini .t { font-size: 18px; }
+.art .s { font-size: 13.5px; line-height: 1.6; opacity: .93; text-shadow: 0 1px 8px rgba(0, 0, 0, .6); max-width: 60ch; }
+/* 画像がまだない場面の色 */
+.art.tone-night { --art-bg: radial-gradient(38% 70% at 12% -10%, rgba(255, 244, 214, .38), transparent 70%), radial-gradient(38% 70% at 88% -10%, rgba(255, 244, 214, .32), transparent 70%), linear-gradient(180deg, #0b1b33 0%, #0e3428 64%, #1d6a45 100%); }
+.art.tone-sun { --art-bg: radial-gradient(30% 60% at 85% 0%, rgba(255, 236, 160, .7), transparent 70%), linear-gradient(180deg, #3d8fd1 0%, #8cc8ea 55%, #3e9a57 100%); }
+.art.tone-gold { --art-bg: radial-gradient(55% 90% at 75% 10%, rgba(255, 206, 92, .6), transparent 70%), linear-gradient(160deg, #241604 0%, #5e420f 58%, #b98b25 100%); }
+.art.tone-navy { --art-bg: radial-gradient(40% 80% at 70% 0%, rgba(160, 190, 255, .35), transparent 70%), linear-gradient(160deg, #081026 0%, #18295a 100%); }
+.art.tone-ice { --art-bg: radial-gradient(45% 80% at 80% 0%, rgba(255, 255, 255, .55), transparent 70%), linear-gradient(180deg, #5f88a6 0%, #a9c6da 60%, #d6e4ec 100%); }
+.art.tone-dusk { --art-bg: radial-gradient(40% 70% at 82% 100%, rgba(255, 190, 110, .55), transparent 70%), linear-gradient(180deg, #221c45 0%, #7a3f63 58%, #d98a55 100%); }
+.title.art-bg { background: linear-gradient(180deg, rgba(4, 18, 12, .55), rgba(4, 18, 12, .9)), var(--art) center / cover no-repeat, var(--bg); }
+.evrow.pic { grid-template-columns: 84px minmax(0, 1fr) auto; }
+@media (max-width: 860px) { .art figcaption { padding: 14px 16px; } .art .s { font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; } .art.cut { margin: -16px -18px 12px; } }
+@media (max-width: 480px) { .evrow.pic { grid-template-columns: 64px minmax(0, 1fr); } .evrow.pic .art.thumb { width: 64px; height: 48px; } }
+
 /* ===== 球場の広告マップ ===== */
 .admap { width: 100%; height: auto; display: block; max-width: 560px; margin: 0 auto; }
 .admap .grass { fill: rgba(79, 212, 139, .10); }
@@ -375,6 +404,7 @@ table.t.compact td { padding: 4px 6px; } table.t.compact th { padding: 5px 6px; 
 <body>
 <div id="app"><noscript>このゲームを遊ぶにはJavaScriptを有効にしてください。</noscript></div>
 <script>
+const ART_FILES = {"camp":"img/camp.jpg?v=883daa4f","season":"img/season.jpg?v=69c1b333","title":"img/title.jpg?v=1f576f3c"};
 'use strict';
 /* =========================================================
    球団社長 — 基本ユーティリティ
@@ -4539,6 +4569,58 @@ function slotMeta(slot) { try { const s = localStorage.getItem(SAVE_KEY + slot +
 function deleteSlot(slot) { try { localStorage.removeItem(SAVE_KEY + slot); localStorage.removeItem(SAVE_KEY + slot + '_meta'); } catch (e) { } }
 
 /* =========================================================
+   場面の画像（Canva で生成し img/ に置いたもの）
+   画像がまだない場面は、場面ごとの色だけで表示する
+   ========================================================= */
+const ART = {
+  title: { alt: '満員のナイター', tone: 'night' },
+  camp: { alt: '春季キャンプの練習風景', tone: 'sun' },
+  season: { alt: 'ナイターの試合', tone: 'night', or: ['title'] },
+  post: { alt: 'ポストシーズンの夜', tone: 'gold', or: ['season', 'title'] },
+  draft: { alt: 'ドラフト会議の会場', tone: 'navy' },
+  off: { alt: '冬の球場', tone: 'ice' },
+  champ: { alt: '優勝の瞬間', tone: 'gold', or: ['post'] },
+  office: { alt: '球場を見下ろす社長室', tone: 'dusk' },
+  stadium: { alt: '本拠地の球場', tone: 'dusk' },
+  dome: { alt: 'ドーム球場', tone: 'night', or: ['stadium'] },
+  town1: { alt: '静かな球場前の通り', tone: 'dusk' },
+  town2: { alt: '店が並ぶ球場通り', tone: 'dusk', or: ['town1'] },
+  town3: { alt: 'にぎわうボールパークの街', tone: 'gold', or: ['town2', 'town1'] },
+  town4: { alt: '観光客でにぎわう夜のボールパークシティ', tone: 'night', or: ['town3', 'town2'] },
+  ev_matsuri: { alt: '夏祭り', tone: 'dusk' },
+  ev_hanabi: { alt: '球場の上の花火', tone: 'night' },
+  ev_gourmet: { alt: 'グルメフェス', tone: 'sun' },
+  ev_music: { alt: '音楽フェス', tone: 'night' },
+  ev_xmas: { alt: 'イルミネーション', tone: 'ice' }
+};
+/* その場面の画像がなければ、近い場面の画像を使う（or） */
+function artSrc(k) {
+  if (typeof ART_FILES === 'undefined') return '';
+  if (ART_FILES[k]) return ART_FILES[k];
+  for (const o of ((ART[k] && ART[k].or) || [])) if (ART_FILES[o]) return ART_FILES[o];
+  return '';
+}
+function hasArt(k) { return !!artSrc(k); }
+/* 場面の画像。o.h＝高さのクラス（banner／cut／thumb）、o.title・o.sub＝画像の上に重ねる文字 */
+function art(k, o) {
+  o = o || {}; const a = ART[k] || { alt: '', tone: 'night' }; const src = artSrc(k);
+  const tt = o.h1 ? 'h1' : 'span';
+  const txt = o.title || o.sub ? `<figcaption>${o.kicker ? `<span class="k">${o.kicker}</span>` : ''}${o.title ? `<${tt} class="t">${o.title}</${tt}>` : ''}${o.sub ? `<span class="s">${o.sub}</span>` : ''}</figcaption>` : '';
+  return `<figure class="art ${o.h || 'banner'} tone-${a.tone}${src ? ' has' : ''} ${o.cls || ''}">${src ? `<img src="${src}" alt="${esc(a.alt)}" decoding="async"${o.eager ? '' : ' loading="lazy"'} onerror="this.parentNode.classList.remove('has');this.remove()">` : ''}${txt}</figure>`;
+}
+/* いまの時期の場面 */
+function phaseArt(t) {
+  t = t === undefined ? curTurn() : t;
+  if (t >= 4 && t <= 10) return 'camp';
+  if (t >= 11 && t <= MAKEUP_TURN) return 'season';
+  if (t >= 36 && t <= 38) return 'post';
+  if (t === 39) return 'draft';
+  return 'off';
+}
+/* 街の段階（10段階）→ 4枚の絵 */
+function townArt(i) { return i <= 3 ? 'town1' : i <= 5 ? 'town2' : i <= 7 ? 'town3' : 'town4'; }
+
+/* =========================================================
    画面の土台：描画・イベント・モーダル・表・グラフ
    ========================================================= */
 const UI = { screen: 'title', tab: {}, sort: {}, modal: null, mq: [], navOpen: false, busy: null, sel: {}, flip: false, lastDate: '',
@@ -4814,7 +4896,7 @@ SCREENS.title = () => {
   if (s.step === 2) return titleSetup();
   if (s.step === 3) return titleLoad();
   if (s.step === 4) return titleCustom();
-  return `<div class="title"><div class="title-board">
+  return `<div class="title${hasArt('title') ? ' art-bg' : ''}"${hasArt('title') ? ` style="--art:url('${artSrc('title')}')"` : ''}><div class="title-board">
     <h1>球団社長</h1>
     <p>プロ野球経営シミュレーション</p>
     <div class="lamps"><span><i class="dot b"></i>補強</span><span><i class="dot s"></i>育成</span><span><i class="dot o"></i>経営</span></div>
@@ -4985,7 +5067,7 @@ ACT.importFile = el => {
 };
 MODALS.welcome = () => {
   const T = uT();
-  return { title: `${esc(G.user.name)}社長、ようこそ`, size: 'narrow', body: `<p>${esc(tName(T.id))}の球団社長に就任しました。チームを強くし、ファンを増やし、球団を黒字にするのがあなたの仕事です。</p>
+  return { title: `${esc(G.user.name)}社長、ようこそ`, size: 'narrow', body: `${art('office', { h: 'cut', kicker: `${G.year}年1月`, title: `${esc(tName(T.id))}の球団社長に就任`, eager: true })}<p>${esc(tName(T.id))}の球団社長に就任しました。チームを強くし、ファンを増やし、球団を黒字にするのがあなたの仕事です。</p>
     <ol class="small" style="padding-left:1.2em;margin:10px 0">
       <li>ホームの「やること」から、予算・中期計画・キャンプを決めます。</li>
       <li>右上の<b>「次の週へ」</b>で1週間ずつ進みます。▾ からまとめて進めることもできます。</li>
@@ -5014,9 +5096,12 @@ function afterAdvance(rep, quiet) {
     if (G.post && G.post.champ === T.id && G.flags.celGs !== G.year) { G.flags.celGs = G.year; openModal('cele', { k: 'gs' }); }
     else if (G.post && curTurn() === 36 && G.post.lgChamp && G.post.lgChamp.includes(T.id) && G.flags.celLg !== G.year) { G.flags.celLg = G.year; openModal('cele', { k: 'lg' }); }
     if (curTurn() === 0 && G.owner.review && !G.owner.review.seen) openModal('review');
+    if (curTurn() === SEASON_START && G.flags.openY !== G.year) { G.flags.openY = G.year; openModal('scene', { k: 'open' }); }
+    if (curTurn() === 39 && G.flags.draftY !== G.year) { G.flags.draftY = G.year; openModal('scene', { k: 'draft' }); }
+    const sl = (G.town.stageLog || []); if (sl.length && (G.flags.stageSeen || 0) < sl.length) { G.flags.stageSeen = sl.length; openModal('scene', { k: 'stage' }); }
     if (!quiet && rep && G.user.showWeekly && (rep.games.length || rep.exh || rep.news.length)) openModal('weekly');
     if (G.pending.length) openModal('event', { i: 0 });
-    if (curTurn() === 39 && G.draft && G.draft.stage !== 'done') toast('ドラフト会議が始まります。「ドラフト会議」画面へ', 'good');
+
   }
   render();
 }
@@ -5104,13 +5189,13 @@ ACT.openEvent = () => { if (G.pending.length) openModal('event', { i: 0 }); rend
 MODALS.review = () => {
   const r = G.owner.review; if (!r) return null; r.seen = true;
   const T = uT(); const h = G.fin.hist[G.fin.hist.length - 1];
-  return { title: `${r.y}年 オーナー評価`, size: 'narrow', body: `<div class="row sp"><div><div class="small muted">オーナーの信頼</div><div class="stat-big ${r.d >= 0 ? 'pos' : 'neg'}">${Math.round(r.trust)} <span class="small">（${r.d >= 0 ? '+' : ''}${Math.round(r.d)}）</span></div></div><div class="right small muted">${h ? `営業収支 ${fmtSigned(h.op != null ? h.op : h.net)}<br>観客 ${fmtPeople(h.att)}` : ''}</div></div>
+  return { title: `${r.y}年 オーナー評価`, size: 'narrow', body: `${art('office', { h: 'cut', kicker: `${r.y}年 年度末`, title: 'オーナー会議', eager: true })}<div class="row sp"><div><div class="small muted">オーナーの信頼</div><div class="stat-big ${r.d >= 0 ? 'pos' : 'neg'}">${Math.round(r.trust)} <span class="small">（${r.d >= 0 ? '+' : ''}${Math.round(r.d)}）</span></div></div><div class="right small muted">${h ? `営業収支 ${fmtSigned(h.op != null ? h.op : h.net)}<br>観客 ${fmtPeople(h.att)}` : ''}</div></div>
     <table class="t compact" style="margin-top:10px"><tbody>${r.notes.map(n => `<tr><td>${esc(n[0])}</td><td class="num ${n[1] >= 0 ? 'pos' : 'neg'}">${n[1] >= 0 ? '+' : ''}${n[1]}</td></tr>`).join('')}</tbody></table>
     ${r.subsidy ? `<p class="small">親会社が赤字のうち${fmtOku(r.subsidy)}を補填しました。</p>` : ''}${r.capex ? `<p class="small muted">設備投資 ${fmtOku(r.capex)} は営業収支の評価に含めていません。</p>` : ''}${r.tax ? `<p class="small muted">法人税等 ${fmtOku(r.tax)} を納めました。</p>` : ''}
     <p class="small muted">新しい年が始まりました。予算・中期計画・キャンプを確認しましょう。</p>`,
     foot: '<button class="btn" data-a="go" data-v="plan">中長期計画へ</button><button class="btn pri" data-a="closeModal">閉じる</button>' };
 };
-MODALS.gameover = () => ({ title: '球団社長を解任されました', size: 'narrow', body: `<p>${esc(G.gameOver.why)}。</p><p class="muted">在任：${G.startYear || START_YEAR}年〜${G.gameOver.y}年</p>`,
+MODALS.gameover = () => ({ title: '球団社長を解任されました', size: 'narrow', body: `${art('off', { h: 'cut', eager: true })}<p>${esc(G.gameOver.why)}。</p><p class="muted">在任：${G.startYear || START_YEAR}年〜${G.gameOver.y}年</p>`,
   foot: '<button class="btn" data-a="go" data-v="records">球団史を見る</button><button class="btn pri" data-a="toTitle">タイトルへ</button>' });
 ACT.toTitle = () => { closeAllModals(); UI.screen = 'title'; UI.title.step = 0; G = null; render(); };
 
@@ -5132,7 +5217,7 @@ SCREENS.home = () => {
   const F = G.fin; const ytdNet = opNet();
   const week = thisWeekGames();
   const leaders = homeLeaders();
-  return `<h1 class="h1">${phaseLabel()}</h1><p class="lead">${homeLead()}</p>
+  return `${art(phaseArt(t), { h1: true, kicker: `${G.year}年 ${G.month}月 第${G.week}週`, title: phaseLabel(), sub: homeLead(), eager: true })}
   <div class="grid g-home">
     <div class="stack">
       ${panel('やること', taskHtml, { flush: true })}
@@ -5183,12 +5268,24 @@ function homeLeaders() {
   return `<table class="t compact"><tbody>${bats.map(p => `<tr><td>${pLink(p)}</td><td class="num">${fmtAvg(bAvg(p.st))}</td><td class="num">${p.st.hr}本</td><td class="num">${p.st.rbi}点</td></tr>`).join('')}${pits.map(p => `<tr><td>${pLink(p)}</td><td class="num">防${fmtEra(pEra(p.st))}</td><td class="num">${p.st.w}勝${p.st.l}敗</td><td class="num">${p.st.sv ? p.st.sv + 'S' : p.st.hld ? p.st.hld + 'H' : p.st.so + 'K'}</td></tr>`).join('')}</tbody></table>`;
 }
 
+/* 大きな節目のカットイン */
+MODALS.scene = ({ k }) => {
+  const T = uT();
+  if (k === 'open') return { title: '開幕', size: 'narrow', body: `${art('season', { h: 'cut', kicker: `${G.year}年 3月`, title: 'ペナントレース開幕', sub: `${esc(tName(T.id))}の${G.year}年シーズンが始まります`, eager: true })}<p>143試合の戦いが始まります。毎週6試合。故障者の入れ替えと、7月末までの補強を忘れずに。</p><p class="small muted">去年の順位：${T.lastRank ? T.lastRank + '位' : '―'}　オーナーの期待：${expectedRank()}位前後</p>`,
+    foot: '<button class="btn" data-a="closeModal">閉じる</button><button class="btn pri" data-a="go" data-v="lineup">オーダーを確認する</button>' };
+  if (k === 'draft') return { title: 'ドラフト会議', size: 'narrow', body: `${art('draft', { h: 'cut', kicker: `${G.year}年 10月`, title: '運命のドラフト会議', sub: '1位は12球団が一斉に入札。重なれば抽選です', eager: true })}<p>スカウトが追いかけてきた有望株を指名する日です。</p>`,
+    foot: '<button class="btn" data-a="closeModal">あとで</button><button class="btn pri" data-a="go" data-v="draft">ドラフト会議へ</button>' };
+  if (k === 'stage') { const s = townStage(); const L = G.town.stageLog[G.town.stageLog.length - 1]; const n = TOWN_STAGES[L.i - 1][1];
+    return { title: '街が発展しました', size: 'narrow', body: `${art(townArt(L.i), { h: 'cut', kicker: `街の段階 ${L.i}／${TOWN_STAGES.length}`, title: n, eager: true })}<p>球場のまわりが「${n}」になりました。地域の愛着と人気が少し上がっています。</p>${s.next != null ? `<p class="small muted">次の「${s.nextN}」まで、いつもの賑わいがあと${Math.max(1, s.next - Math.floor(s.v))}です。</p>` : '<p class="small muted">これが最後の段階です。</p>'}`,
+      foot: '<button class="btn" data-a="closeModal">閉じる</button><button class="btn pri" data-a="go" data-v="town">街づくりへ</button>' }; }
+  return null;
+};
 MODALS.cele = ({ k }) => {
   const T = uT(); const gs = k === 'gs'; const y = gs ? G.year : G.year;
   const R = T.rec; const s = gs ? G.post.series.find(x => x.kind === 'gs') : null;
   const mvp = gs && G.post.mvp != null ? P_(G.post.mvp) : null;
   return { title: gs ? '日本一！' : 'リーグ優勝！', size: 'narrow',
-    body: `<div class="title-board" style="padding:26px 18px;box-shadow:none">${emblem(T, 84)}<h1 style="font-size:46px;margin-top:10px">${gs ? '日本一' : '優勝'}</h1><p>${esc(tName(T.id))}　${y}年${gs ? '' : '　' + LEAGUES[T.league]}</p>
+    body: `${art(gs ? 'champ' : 'post', { h: 'cut', eager: true })}<div class="title-board" style="padding:26px 18px;box-shadow:none">${emblem(T, 84)}<h1 style="font-size:46px;margin-top:10px">${gs ? '日本一' : '優勝'}</h1><p>${esc(tName(T.id))}　${y}年${gs ? '' : '　' + LEAGUES[T.league]}</p>
       <p class="small">${gs && s ? `グランドシリーズ ${s.winner === s.hi ? s.w[0] + '勝' + s.w[1] + '敗' : s.w[1] + '勝' + s.w[0] + '敗'}` : `${R.w}勝${R.l}敗${R.d ? R.d + '分' : ''}`}${mvp ? '　シリーズMVP ' + esc(mvp.name) : ''}</p></div>
       <p class="small muted" style="margin-top:12px">${gs ? '優勝記念グッズが飛ぶように売れています。オーナーもきっと喜んでいるはずです。' : 'このあとプレーオフで日本一を目指します。'}</p>`,
     foot: '<button class="btn pri" data-a="closeModal">閉じる</button>' };
@@ -5974,7 +6071,7 @@ ACT.scMarkM = el => { const p = G.prospects.find(x => x.id === +el.dataset.id); 
 /* ---------- ドラフト会議 ---------- */
 SCREENS.draft = () => {
   const t = curTurn(); const D = G.draft; const ut = G.user.tid;
-  const head = `<h1 class="h1">ドラフト会議</h1>`;
+  const head = art('draft', { h1: true, kicker: `${G.year}年 10月第4週`, title: 'ドラフト会議', sub: t === 39 ? 'いよいよ指名の日。1位は一斉入札、重なれば抽選です' : '' });
   if (t !== 39 || !D) {
     const marked = G.prospects.filter(p => p.pr.mark);
     const last = D && D.picks ? draftSummary(D) : '';
@@ -6125,7 +6222,7 @@ SCREENS.stadium = () => {
   const tab = getTab('stadium', 'stad');
   const S = G.stad; const T = uT();
   const tb = tabs('stadium', [['stad', '本拠地球場'], ['team', 'チーム施設'], ['new', '球場の買収・新球場']], tab);
-  const head = `<h1 class="h1">球場・設備</h1><div class="panel" style="margin-bottom:16px">${tiles([['本拠地', esc(stadiumName()), S.dome ? 'ドーム' : '屋外'], ['収容人数', comma(capOf(T.id)) + '人', S.fac.seats.lv ? `増設Lv${S.fac.seats.lv}` : ''], ['観戦満足度', Math.round(stadSatisfaction()), '設備・状態・築年数で決まる'], ['所有', S.owned ? '球団所有' : '賃借', S.owned ? '使用料なし' : `使用料 ${fmtOku(S.rent)}／年`], ['築年数', (S.age || 0) + '年']])}</div>`;
+  const head = `${art(S.dome ? 'dome' : 'stadium', { h1: true, kicker: '球場・設備', title: esc(stadiumName()), sub: `${comma(capOf(T.id))}人・${S.dome ? 'ドーム' : '屋外'}・${S.owned ? '球団が保有' : '借りている球場'}` })}<div class="panel" style="margin-bottom:16px">${tiles([['本拠地', esc(stadiumName()), S.dome ? 'ドーム' : '屋外'], ['収容人数', comma(capOf(T.id)) + '人', S.fac.seats.lv ? `増設Lv${S.fac.seats.lv}` : ''], ['観戦満足度', Math.round(stadSatisfaction()), '設備・状態・築年数で決まる'], ['所有', S.owned ? '球団所有' : '賃借', S.owned ? '使用料なし' : `使用料 ${fmtOku(S.rent)}／年`], ['築年数', (S.age || 0) + '年']])}</div>`;
   let body = '';
   if (tab === 'stad') body = panel('球場の設備', `<div class="tw"><table class="t"><thead><tr><th>設備</th><th class="num">レベル</th><th>状態</th><th>増強</th><th>改修</th></tr></thead><tbody>${Object.keys(STAD_FAC).map(k => facRow('stad', k)).join('')}</tbody></table></div>`, { flush: true }) + '<p class="small muted">設備は少しずつ傷み、状態が下がると効果が落ちます。スタンド増設とフィールド整備はオフシーズン（10月〜2月）だけ着工できます。</p>';
   else if (tab === 'team') body = panel('チーム施設', `<div class="tw"><table class="t"><thead><tr><th>施設</th><th class="num">レベル</th><th>状態</th><th>増強</th><th>改修</th></tr></thead><tbody>${Object.keys(TEAM_FAC).map(k => facRow('team', k)).join('')}</tbody></table></div>`, { flush: true });
@@ -6340,7 +6437,7 @@ SCREENS.town = () => {
   const tab = getTab('town', 'map');
   const nEv = (tw.events || []).length;
   const stg = townStage();
-  const head = `<h1 class="h1">街づくり</h1><p class="lead">球場の周りに街をつくり、観客が来やすく、試合がない日も人が集まる「ボールパーク」を目指します。イベントで人を呼ぶと、空いている土地に民間の店や住宅が建ち、街が自然に育っていきます。</p>
+  const head = `${art(townArt(stg.i), { h1: true, kicker: `街づくり・段階 ${stg.i}／${stg.max}`, title: stg.n, sub: '球場の周りに街をつくり、試合がない日も人が集まる「ボールパーク」を目指します。イベントで人を呼ぶと、空いている土地に民間の店や住宅が建っていきます。' })}
   <div class="panel" style="margin-bottom:16px">${tiles([['街の段階', stg.n, `段階 ${stg.i}／${stg.max}`, 'txt'], ['アクセス', st.acc], ['賑わい', st.vib, st.vib !== st.vibBase ? `いつもの賑わい ${st.vibBase}` : ''], ['住民', fmtPeople(Math.round(st.pop))], ['地域の愛着', Math.round(tw.attach)], ['発展の勢い', Math.round(tw.dev || 0), (tw.dev || 0) >= DEV_START ? '民間の開発が進行中' : DEV_START + 'で民間の開発が始まる'], ['地価', '×' + tw.landIdx.toFixed(2)], ['街の収入', fmtOku(townWeeklyRevenue(curTurn() >= 11 && curTurn() <= 38)) + '／週']])}</div>
   ${tabs('town', [['map', '区画と建物'], ['ev', '街のイベント', nEv || null]], tab)}`;
   return head + (tab === 'ev' ? townEventsView() : townMapView());
@@ -6407,7 +6504,8 @@ function evEffects(d, m) {
 }
 function townEventsView() {
   const tw = G.town; const evs = tw.events || [];
-  const running = evs.length ? `<div class="lot">${evs.map(e => { const d = TOWN_EVENTS[e.k]; return `<div class="lot-row"><span style="font-size:22px">${d.i}</span><div style="flex:1;min-width:160px"><b>${d.n}</b> <span class="small muted">残り${e.wk}週</span>${bar(e.tot - e.wk, e.tot)}</div></div>`; }).join('')}</div>`
+  const evPic = evs.find(e => hasArt('ev_' + e.k));
+  const running = evs.length ? (evPic ? art('ev_' + evPic.k, { h: 'mini', title: TOWN_EVENTS[evPic.k].n, sub: '開催中' }) : '') + `<div class="lot">${evs.map(e => { const d = TOWN_EVENTS[e.k]; return `<div class="lot-row"><span style="font-size:22px">${d.i}</span><div style="flex:1;min-width:160px"><b>${d.n}</b> <span class="small muted">残り${e.wk}週</span>${bar(e.tot - e.wk, e.tot)}</div></div>`; }).join('')}</div>`
     : '<p class="muted" style="margin:0">いま開いているイベントはありません。下の一覧から開催できます（同時に2つまで）。</p>';
   const dev = tw.dev || 0;
   const sg = townStage();
@@ -6415,7 +6513,7 @@ function townEventsView() {
   const list = Object.entries(TOWN_EVENTS).map(([k, d]) => {
     const c = eventCanHost(k); const m = eventMult(k); const on = evs.some(e => e.k === k);
     const when = [d.months ? d.months.join('・') + '月' : '通年', d.off ? 'オフ限定' : '', `${d.wk}週間`].filter(Boolean).join('・');
-    return `<div class="evrow ${on ? 'on' : ''}"><div class="ei">${d.i}</div><div><b>${d.n}</b> <span class="small muted">${fmtOku(d.cost)}・${when}</span><div class="small muted">${d.d}</div>${evEffects(d, m)}</div>
+    return `<div class="evrow ${on ? 'on' : ''}${hasArt('ev_' + k) ? ' pic' : ''}">${hasArt('ev_' + k) ? art('ev_' + k, { h: 'thumb' }) : `<div class="ei">${d.i}</div>`}<div><b>${d.n}</b> <span class="small muted">${fmtOku(d.cost)}・${when}</span><div class="small muted">${d.d}</div>${evEffects(d, m)}</div>
       <button class="btn sm pri" data-a="hostEv" data-k="${k}" ${c.ok ? '' : 'disabled'}>開催する</button>${c.ok ? '' : `<div class="why">${esc(c.why)}</div>`}</div>`;
   }).join('');
   const log = (tw.evLog || []).slice(0, 8);

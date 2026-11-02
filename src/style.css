@@ -255,6 +255,35 @@ table.t.compact td { padding: 4px 6px; } table.t.compact th { padding: 5px 6px; 
 .cell.priv { border-style: solid; border-color: transparent; background: rgba(140, 160, 200, .10); }
 .cell.priv .lb { color: var(--ink3); }
 .cell.priv::after { content: "民"; position: absolute; top: 3px; left: 5px; font-size: 9.5px; color: var(--ink3); }
+/* ===== 場面の画像（Canva で生成） ===== */
+.art { position: relative; isolation: isolate; overflow: hidden; margin: 0 0 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--art-bg); }
+.art img { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; }
+.art::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(3, 16, 11, .88) 0%, rgba(3, 16, 11, .62) 42%, rgba(3, 16, 11, .12) 100%); }
+.art.banner { min-height: clamp(150px, 19vw, 220px); display: flex; align-items: flex-end; }
+.art.cut { margin: -16px -18px 14px; border: 0; border-radius: 0; min-height: clamp(150px, 34vw, 220px); display: flex; align-items: flex-end; }
+.art.cut::after { background: linear-gradient(0deg, rgba(3, 16, 11, .9) 0%, rgba(3, 16, 11, .45) 48%, rgba(3, 16, 11, .05) 100%); }
+.art.mini { margin: 0 0 10px; min-height: 120px; display: flex; align-items: flex-end; }
+.art.mini::after { background: linear-gradient(0deg, rgba(3, 16, 11, .85), rgba(3, 16, 11, .1) 70%); }
+.art.thumb { flex: none; width: 84px; height: 60px; margin: 0; border-radius: 5px; }
+.art.thumb::after { background: none; }
+.art figcaption { display: grid; gap: 4px; padding: 18px 22px; max-width: min(720px, 100%); color: #F4F7F1; }
+.art.cut figcaption, .art.mini figcaption { padding: 14px 18px; }
+.art .k { font-family: var(--f-num); font-size: 12px; color: #FFB547; letter-spacing: .04em; }
+.art .t { margin: 0; font-family: var(--f-disp); font-weight: 400; font-size: clamp(22px, 3vw, 32px); line-height: 1.2; text-shadow: 0 2px 14px rgba(0, 0, 0, .55); }
+.art.mini .t { font-size: 18px; }
+.art .s { font-size: 13.5px; line-height: 1.6; opacity: .93; text-shadow: 0 1px 8px rgba(0, 0, 0, .6); max-width: 60ch; }
+/* 画像がまだない場面の色 */
+.art.tone-night { --art-bg: radial-gradient(38% 70% at 12% -10%, rgba(255, 244, 214, .38), transparent 70%), radial-gradient(38% 70% at 88% -10%, rgba(255, 244, 214, .32), transparent 70%), linear-gradient(180deg, #0b1b33 0%, #0e3428 64%, #1d6a45 100%); }
+.art.tone-sun { --art-bg: radial-gradient(30% 60% at 85% 0%, rgba(255, 236, 160, .7), transparent 70%), linear-gradient(180deg, #3d8fd1 0%, #8cc8ea 55%, #3e9a57 100%); }
+.art.tone-gold { --art-bg: radial-gradient(55% 90% at 75% 10%, rgba(255, 206, 92, .6), transparent 70%), linear-gradient(160deg, #241604 0%, #5e420f 58%, #b98b25 100%); }
+.art.tone-navy { --art-bg: radial-gradient(40% 80% at 70% 0%, rgba(160, 190, 255, .35), transparent 70%), linear-gradient(160deg, #081026 0%, #18295a 100%); }
+.art.tone-ice { --art-bg: radial-gradient(45% 80% at 80% 0%, rgba(255, 255, 255, .55), transparent 70%), linear-gradient(180deg, #5f88a6 0%, #a9c6da 60%, #d6e4ec 100%); }
+.art.tone-dusk { --art-bg: radial-gradient(40% 70% at 82% 100%, rgba(255, 190, 110, .55), transparent 70%), linear-gradient(180deg, #221c45 0%, #7a3f63 58%, #d98a55 100%); }
+.title.art-bg { background: linear-gradient(180deg, rgba(4, 18, 12, .55), rgba(4, 18, 12, .9)), var(--art) center / cover no-repeat, var(--bg); }
+.evrow.pic { grid-template-columns: 84px minmax(0, 1fr) auto; }
+@media (max-width: 860px) { .art figcaption { padding: 14px 16px; } .art .s { font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; } .art.cut { margin: -16px -18px 12px; } }
+@media (max-width: 480px) { .evrow.pic { grid-template-columns: 64px minmax(0, 1fr); } .evrow.pic .art.thumb { width: 64px; height: 48px; } }
+
 /* ===== 球場の広告マップ ===== */
 .admap { width: 100%; height: auto; display: block; max-width: 560px; margin: 0 auto; }
 .admap .grass { fill: rgba(79, 212, 139, .10); }

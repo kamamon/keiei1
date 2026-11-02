@@ -60,7 +60,7 @@ ACT.scMarkM = el => { const p = G.prospects.find(x => x.id === +el.dataset.id); 
 /* ---------- ドラフト会議 ---------- */
 SCREENS.draft = () => {
   const t = curTurn(); const D = G.draft; const ut = G.user.tid;
-  const head = `<h1 class="h1">ドラフト会議</h1>`;
+  const head = art('draft', { h1: true, kicker: `${G.year}年 10月第4週`, title: 'ドラフト会議', sub: t === 39 ? 'いよいよ指名の日。1位は一斉入札、重なれば抽選です' : '' });
   if (t !== 39 || !D) {
     const marked = G.prospects.filter(p => p.pr.mark);
     const last = D && D.picks ? draftSummary(D) : '';
