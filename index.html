@@ -109,6 +109,7 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1px; background: var(--line); border-top: 1px solid var(--line); }
 .tile { background: var(--panel); padding: 10px 14px; }
 .tile .k { font-size: 12px; color: var(--ink2); } .tile .v { font-family: var(--f-num); font-size: 18px; white-space: nowrap; } .tile .s { font-size: 11px; color: var(--ink3); }
+.tile .v.txt { font-family: var(--f-body); font-size: 15px; font-weight: 700; white-space: normal; line-height: 1.35; padding-top: 2px; }
 
 /* ===== ボタン・入力 ===== */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 13px; border: 1px solid var(--line2); background: transparent; color: var(--ink);
@@ -228,6 +229,28 @@ table.t.compact td { padding: 4px 6px; } table.t.compact th { padding: 5px 6px; 
 .tcard.on { outline: 2px solid var(--lamp); }
 .tcard .nm { font-family: var(--f-disp); font-size: 17px; line-height: 1.2; }
 .stars { color: var(--lamp); letter-spacing: 1px; }
+.tcard.custom { border: 1px dashed var(--lamp); border-top: 4px dashed var(--lamp); align-content: center; background: transparent; }
+.tcard.custom:hover { background: var(--panel); }
+.tcard.custom .nm { color: var(--lamp); }
+
+/* ===== カスタムスタート ===== */
+.cs { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; --team: var(--lamp); --team-ink: var(--lamp-ink); }
+.cs-side { position: sticky; top: 16px; display: grid; gap: 12px; }
+.cs-plate { position: relative; overflow: hidden; background: linear-gradient(var(--board), var(--board2)); color: var(--board-ink); border-radius: 8px; border-top: 8px solid var(--c); padding: 20px 16px 22px; text-align: center; box-shadow: var(--shadow); }
+.cs-plate::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: var(--c2); }
+.cs-plate .nm { font-family: var(--f-disp); font-size: 22px; line-height: 1.25; margin-top: 10px; overflow-wrap: anywhere; }
+.cs-plate .sub { font-size: 12px; opacity: .75; margin-top: 4px; }
+.cs-side .stars { font-family: var(--f-body); font-size: 17px; letter-spacing: 2px; }
+.cf { display: grid; grid-template-columns: 8.5em minmax(0, 1fr); gap: 4px 12px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.cf:first-child { padding-top: 0; } .cf:last-child { border-bottom: 0; padding-bottom: 0; }
+.cf-l { color: var(--ink2); font-size: 13px; }
+.cf-v { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; min-width: 0; }
+.cf-v > .inp { flex: 1 1 180px; }
+.cf-v .note { flex-basis: 100%; font-size: 12px; color: var(--ink3); }
+.cf input[type=color] { width: 46px; height: 32px; padding: 2px; border: 1px solid var(--line2); border-radius: var(--r); background: var(--panel2); cursor: pointer; }
+.cf input[type=range] { flex: 1 1 160px; accent-color: var(--lamp); min-width: 0; }
+.cf output { font-family: var(--f-num); min-width: 5.5em; text-align: right; }
+@media (max-width: 860px) { .cs { grid-template-columns: minmax(0, 1fr); } .cs-side { position: static; order: -1; } .cf { grid-template-columns: minmax(0, 1fr); } }
 
 /* ===== 街づくり ===== */
 .town { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
@@ -241,6 +264,16 @@ table.t.compact td { padding: 4px 6px; } table.t.compact th { padding: 5px 6px; 
 .cell.stadium { background: var(--team-soft); border: 2px solid var(--team); }
 .cell.station { background: rgba(255, 181, 71, .08); border-style: solid; }
 .cell.wip .ic { opacity: .45; }
+.cell.priv { border-style: solid; border-color: transparent; background: rgba(140, 160, 200, .10); }
+.cell.priv .lb { color: var(--ink3); }
+.cell.priv::after { content: "民"; position: absolute; top: 3px; left: 5px; font-size: 9.5px; color: var(--ink3); }
+.evrow { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel2); }
+.evrow .ei { font-size: 24px; line-height: 1; text-align: center; }
+.evrow .why { font-size: 11.5px; color: var(--ink3); grid-column: 2 / 4; }
+.evrow.on { border-color: var(--lamp); }
+.evfx { font-size: 12px; color: var(--ball); }
+@media (max-width: 860px) { .evgrid > :last-child { order: -1; } }
+@media (max-width: 480px) { .evrow { grid-template-columns: 28px minmax(0, 1fr); } .evrow > .btn { grid-column: 2; justify-self: start; } .evrow .why { grid-column: 2; } }
 
 /* ===== チャート ===== */
 .chart { width: 100%; height: auto; display: block; }
@@ -624,7 +657,7 @@ const REV_CATS = { ticket: '入場料', food: '飲食', goods: 'グッズ', tv: 
   fanclub: 'ファンクラブ', town: '街・不動産', farm: '2軍・その他', prize: '賞金・分配金', transfer: '移籍金', subsidy: '親会社の支援' };
 const EXP_CATS = { payroll: '選手年俸', staff: 'スタッフ人件費', rent: '球場使用料', ops: '試合運営費', travel: '遠征費', maint: '設備維持費',
   ads: '広告宣伝費', promo: 'イベント費', scout: 'スカウト費', dev: '育成費', sales: '営業費', camp: 'キャンプ費', capex: '設備投資',
-  land: '土地取得', bonus: '契約金', transfer: '移籍金', interest: '支払利息', fc: 'ファンクラブ特典', tax: '法人税等', other: 'その他' };
+  land: '土地取得', bonus: '契約金', transfer: '移籍金', interest: '支払利息', fc: 'ファンクラブ特典', townev: '街のイベント費', tax: '法人税等', other: 'その他' };
 const BUDGET_ITEMS = {
   scout: { n: 'スカウト活動費', d: '調査の速さと範囲が変わる', min: 5000, max: 80000 },
   dev: { n: '育成費', d: '全選手の成長速度が変わる', min: 10000, max: 120000 },
@@ -640,6 +673,38 @@ const GOODS = {
   plush: { n: 'マスコットのぬいぐるみ', cost: 1500, wk: 12, boost: 0.15, fans: 2, d: '子どもと女性に人気。ファンも少し増える' },
   uni: { n: '限定ユニフォーム', cost: 3000, wk: 6, boost: 0.4, pop: 0.5, d: '数量限定。話題になり人気も上がる' }
 };
+
+/* 街のイベント（街の発展を後押しする） */
+const TOWN_EVENTS = {
+  matsuri: { n: '夏祭り', i: '🥁', cost: 3000, wk: 2, months: [7, 8], dev: 40, vib: 10, attach: 4, fans: 3, rev: 800, visit: 50000, d: '地域の人と一緒につくる夏の祭り。地元の愛着が深まる' },
+  hanabi: { n: '花火大会', i: '🎆', cost: 5000, wk: 1, months: [7, 8, 9], dev: 50, vib: 14, attach: 3, pop: 0.8, rev: 1000, visit: 100000, d: '夏の夜空を彩る大花火大会。遠くからも人が集まる' },
+  gourmet: { n: 'グルメフェス', i: '🍜', cost: 4000, wk: 2, months: [3, 4, 5, 6, 9, 10, 11], req: ['yokocho', 'brewery'], dev: 60, vib: 12, fans: 2, rev: 2500, visit: 80000, d: '全国のご当地グルメが集まる。飲食横丁かブルワリーが必要' },
+  marche: { n: 'マルシェ（朝市）', i: '🧺', cost: 800, wk: 4, req: ['park'], dev: 25, vib: 5, attach: 1.5, rev: 600, visit: 20000, cool: 4, d: '芝生広場で毎週末に開く朝市。じわじわ街に根づく。芝生広場が必要' },
+  music: { n: '音楽フェス', i: '🎸', cost: 15000, wk: 1, req: ['arena'], orOff: true, dev: 80, vib: 15, pop: 0.6, fans: 3, rev: 12000, visit: 120000, d: '人気アーティストが集う。アリーナがあればいつでも、なければオフシーズンに球場で開催' },
+  marathon: { n: '市民マラソン', i: '🏃', cost: 6000, wk: 1, months: [11, 12, 1, 2, 3], dev: 45, attach: 4, fans: 2, acc: 1, visit: 30000, d: '球場発着の市民マラソン。沿道の道路が整い、アクセスも少し良くなる' },
+  youth: { n: '少年野球大会', i: '🧢', cost: 1500, wk: 1, dev: 20, attach: 3, fans: 2, visit: 10000, cool: 20, d: '球団主催の少年野球大会。野球アカデミーがあると効果が大きい' },
+  xmas: { n: 'イルミネーション', i: '🎄', cost: 4000, wk: 4, months: [12], dev: 50, vib: 10, attach: 2, rev: 1500, visit: 60000, d: '冬の夜を彩る光の街。年末の人出を呼び込む' },
+  openday: { n: '球場開放デー', i: '🧤', cost: 500, wk: 1, off: true, dev: 15, attach: 2, fans: 1.5, pop: 0.3, visit: 15000, cool: 6, d: 'グラウンドを開放してキャッチボール。オフシーズン限定' },
+  sale: { n: '商店街合同セール', i: '🛍️', cost: 1000, wk: 2, dev: 30, vib: 4, attach: 2.5, visit: 25000, cool: 16, d: '地元の商店街と一緒にセールを開き、街全体で盛り上げる' },
+  bigfes: { n: 'ボールパーク・フェスティバル', i: '🎡', cost: 30000, wk: 2, needVib: 40, req: ['mall', 'arena', 'hotel'], dev: 160, vib: 20, pop: 1.2, fans: 5, rev: 12000, visit: 300000, d: '街全体を会場にした一大祭典。賑わい40以上と、モール・アリーナ・ホテルのいずれかが必要' }
+};
+/* 民間の開発で建つ建物（球団の土地ではない） */
+const PRIV_BLD = {
+  house: { n: '住宅街', i: '🏡', vib: 1, pop: 1800, attach: 1 },
+  shop: { n: '商店', i: '🏪', vib: 2, pop: 300 },
+  cafe: { n: 'カフェ', i: '☕', vib: 3 },
+  izakaya: { n: '居酒屋', i: '🍢', vib: 3, food: 0.01 },
+  office: { n: '民間オフィス', i: '🏦', vib: 2, pop: 800 },
+  bizhotel: { n: 'ビジネスホテル', i: '🛎️', vib: 2, fans: 0.3 }
+};
+const TOWN_STAGES = [[0, '静かな球場前'], [25, 'にぎわい始めた街'], [50, '活気ある球場の街'], [80, 'ボールパークタウン'], [120, '全国に知られる観光地']];
+
+/* カスタムスタートの選択肢 */
+const CUSTOM_STR = { w2: { n: '最弱', off: -5 }, w1: { n: '弱い', off: -2.5 }, n: { n: '普通', off: 0 }, s1: { n: '強い', off: 2.5 }, s2: { n: '最強', off: 5 } };
+const CUSTOM_AI = { w: { n: '弱い', off: -2 }, n: { n: '普通', off: 0 }, s: { n: '強い', off: 2 } };
+const CUSTOM_OWNER = { easy: { n: 'やさしい', d: '評価の減点が小さい', k: 0.6 }, normal: { n: 'ふつう', d: '標準', k: 1 }, hard: { n: 'きびしい', d: '減点が大きく、解任されやすい', k: 1.4 }, none: { n: '解任なし', d: '信頼がなくなっても解任されない', k: 1 } };
+const CUSTOM_TOWN = { empty: { n: '更地', d: '球場と駅だけ。ゼロから街をつくる' }, normal: { n: 'ふつう', d: '駐車場がひとつ' }, dev: { n: '発展済み', d: '飲食横丁や公園、民間の店が並ぶ' } };
+const CUSTOM_LAND = { few: { n: '少ない', d: '球場の両隣だけ' }, normal: { n: 'ふつう', d: '球場の上下左右' }, many: { n: '多い', d: '球場の周り8区画＋α' } };
 
 /* =========================================================
    選手：生成・能力・評価・年俸
@@ -2340,17 +2405,28 @@ function openNewStadium() {
 
 /* ---------- 街づくり ---------- */
 const TOWN_W = 7, TOWN_H = 5, STAD_XY = [3, 2], STATION_XY = [0, 2];
-function initTown(T) {
+function initTown(T, preset, land) {
+  preset = preset || 'normal'; land = land || 'normal';
   const cells = [];
   for (let y = 0; y < TOWN_H; y++) for (let x = 0; x < TOWN_W; x++) {
-    const c = { x, y, own: false, b: null, sp: null };
+    const c = { x, y, own: false, b: null, sp: null, pv: null };
+    const dx = Math.abs(x - STAD_XY[0]), dy = Math.abs(y - STAD_XY[1]);
     if (x === STAD_XY[0] && y === STAD_XY[1]) { c.sp = 'stadium'; c.own = true; }
     else if (x === STATION_XY[0] && y === STATION_XY[1]) { c.sp = 'station'; }
-    else if (Math.abs(x - STAD_XY[0]) + Math.abs(y - STAD_XY[1]) === 1) c.own = true;
+    else if (land === 'few') c.own = dy === 0 && dx === 1;
+    else if (land === 'many') c.own = (dx <= 1 && dy <= 1) || (dy === 0 && dx === 2);
+    else c.own = dx + dy === 1;
     cells.push(c);
   }
-  const pk = cells.find(c => c.x === 3 && c.y === 3); pk.b = { k: 'parking', lv: 1, wk: 0 };
-  G.town = { cells, attach: 20 + T.market * 4, base: 8000 + T.market * 6000, stat: {}, landIdx: 1 };
+  const at = (x, y) => cells.find(c => c.x === x && c.y === y);
+  G.town = { cells, attach: 20 + T.market * 4, base: 8000 + T.market * 6000, stat: {}, landIdx: 1, dev: 0, events: [], evCool: {}, evLog: [], accBonus: 0, visitY: 0 };
+  if (preset !== 'empty') { const pk = at(3, 3); pk.own = true; pk.b = { k: 'parking', lv: 1, wk: 0 }; }
+  if (preset === 'dev') {
+    const put = (x, y, k) => { const c = at(x, y); c.own = true; c.b = { k, lv: 1, wk: 0 }; };
+    put(2, 2, 'yokocho'); put(4, 2, 'park'); put(1, 2, 'bus');
+    for (const [x, y, k] of [[1, 1, 'cafe'], [1, 3, 'shop'], [5, 1, 'house'], [5, 3, 'izakaya'], [0, 1, 'house']]) { const c = at(x, y); if (!c.own && !c.sp) c.pv = { k, y: G.year }; }
+    G.town.attach += 8; G.town.dev = 60;
+  }
   computeTownStats();
 }
 function cellAt(x, y) { return G.town.cells.find(c => c.x === x && c.y === y); }
@@ -2362,7 +2438,7 @@ function landPrice(c) {
   return roundSal(30000 * (1.5 - dist * 0.12 + (dSt <= 1 ? 0.25 : 0)) * G.town.landIdx * (0.6 + T.market * 0.12));
 }
 function buyLand(c) {
-  if (c.own || c.sp) return false;
+  if (c.own || c.sp || c.pv) return false;
   const p = landPrice(c); if (G.fin.cash < p) return false;
   book('exp', 'land', p); G.fin.capexY = (G.fin.capexY || 0) + p; c.own = true;
   addNews('town', `球場周辺の土地を${fmtOku(p)}で取得しました`, { tid: G.user.tid });
@@ -2403,17 +2479,106 @@ function BLD_EFFECT(key) {
 }
 function computeTownStats() {
   const tw = G.town;
-  const st = { acc: 20, vib: 10, pop: tw.base, food: 0, goods: 0, sat: 0, gameRev: 0, heal: 0, fans: 0, academy: 0 };
+  const st = { acc: 20 + (tw.accBonus || 0), vib: 10, pop: tw.base, food: 0, goods: 0, sat: 0, gameRev: 0, heal: 0, fans: 0, academy: 0, priv: 0, evVib: 0 };
   for (const c of tw.cells) {
+    if (c.pv) { const d = PRIV_BLD[c.pv.k]; st.vib += d.vib || 0; st.pop += d.pop || 0; st.food += d.food || 0; st.fans += d.fans || 0; st.priv++; continue; }
     if (!c.b || c.b.wk) continue;
     const d = BLD[c.b.k]; const m = bldMul(c.b) * (d.near && nearStadium(c) ? 1.2 : 1);
     st.acc += (d.acc || 0) * m; st.vib += (d.vib || 0) * m; st.pop += (d.pop || 0) * m;
     st.food += (d.food || 0) * m; st.goods += (d.goods || 0) * m; st.sat += (d.sat || 0) * m;
     st.gameRev += (d.game || 0) * m; st.heal += (d.heal || 0) * m; st.fans += (d.fans || 0) * m; st.academy += (d.academy || 0) * m;
   }
+  for (const e of (tw.events || [])) st.evVib += TOWN_EVENTS[e.k].vib || 0;
+  st.vib += st.evVib + (tw.dev || 0) * 0.03;
   st.vib = Math.round(st.vib); st.acc = Math.round(st.acc);
   tw.stat = st;
-  tw.landIdx = 1 + st.vib / 150;
+  tw.landIdx = 1 + Math.max(0, st.vib - st.evVib) / 150;
+}
+function townStage() { const v = G.town.stat.vib - (G.town.stat.evVib || 0); let n = TOWN_STAGES[0][1], i = 0; TOWN_STAGES.forEach(([t, l], k) => { if (v >= t) { n = l; i = k; } }); return { n, i: i + 1 }; }
+
+/* ---------- 街のイベント ---------- */
+function hasBld(k) { return G.town.cells.some(c => c.b && c.b.k === k && !c.b.wk); }
+function eventCanHost(k) {
+  const d = TOWN_EVENTS[k]; const tw = G.town; const off = isOffseason();
+  if ((tw.events || []).some(e => e.k === k)) return { ok: false, why: '開催中です' };
+  if ((tw.events || []).length >= 2) return { ok: false, why: 'イベントは同時に2つまでです' };
+  const cd = (tw.evCool || {})[k] || 0; if (cd > 0) return { ok: false, why: `次に開けるのは${cd}週後です` };
+  if (d.months && !d.months.includes(G.month)) return { ok: false, why: `${d.months.join('・')}月に開催できます` };
+  if (d.off && !off) return { ok: false, why: 'オフシーズン（10月〜2月）限定です' };
+  if (d.needVib && tw.stat.vib < d.needVib) return { ok: false, why: `街の賑わい${d.needVib}以上が必要です` };
+  if (d.req && !d.req.some(hasBld)) { if (!(d.orOff && off)) return { ok: false, why: d.req.map(x => BLD[x].n).join('か') + 'が必要です' + (d.orOff ? '（オフシーズンなら球場で開催可）' : '') }; }
+  if (G.fin.cash < d.cost) return { ok: false, why: '資金が足りません' };
+  return { ok: true };
+}
+function hostEvent(k) {
+  const c = eventCanHost(k); if (!c.ok) return c;
+  const d = TOWN_EVENTS[k]; const tw = G.town;
+  book('exp', 'townev', d.cost);
+  tw.events = tw.events || []; tw.events.push({ k, wk: d.wk, tot: d.wk });
+  computeTownStats();
+  addNews('town', `${d.n}の開催が始まりました（${d.wk}週間）`, { tid: G.user.tid });
+  return { ok: true };
+}
+function eventMult(k) {
+  const tw = G.town; let m = 1 + tw.attach / 250 + Math.max(0, tw.stat.acc - 20) / 200;
+  if (k === 'youth' && tw.stat.academy > 0) m += 0.6;
+  if (k === 'marche' && hasBld('yokocho')) m += 0.2;
+  if (k === 'music' && hasBld('arena')) m += 0.2;
+  return m;
+}
+function townEventsWeekly() {
+  const tw = G.town; tw.events = tw.events || []; tw.evCool = tw.evCool || {}; tw.evLog = tw.evLog || [];
+  for (const k in tw.evCool) if (tw.evCool[k] > 0) tw.evCool[k]--;
+  const T = uT();
+  for (const e of tw.events) {
+    const d = TOWN_EVENTS[e.k]; const m = eventMult(e.k);
+    e.wk--;
+    const n = e.tot || d.wk || 1;
+    tw.dev = Math.min(DEV_MAX, (tw.dev || 0) + d.dev * m / n);
+    if (d.rev) book('rev', 'town', d.rev * m / n);
+    if (e.wk <= 0) {
+      const visit = Math.round(d.visit * m * rf(0.85, 1.15) / 1000) * 1000;
+      if (d.attach) tw.attach = clamp(tw.attach + d.attach * m * clamp(1.1 - tw.attach / 100, 0.1, 1), 0, 100);
+      if (d.fans) T.fans += d.fans * m;
+      if (d.pop) T.pop = clamp(T.pop + d.pop * m, 0, 99);
+      if (d.acc) tw.accBonus = (tw.accBonus || 0) + d.acc;
+      tw.visitY = (tw.visitY || 0) + visit;
+      tw.evCool[e.k] = d.cool != null ? d.cool : (d.months ? 30 : 10);
+      tw.evLog.unshift({ y: G.year, m: G.month, k: e.k, visit });
+      if (tw.evLog.length > 30) tw.evLog.pop();
+      addNews('town', `${d.n}が閉幕。約${fmtPeople(visit)}が訪れ、街がにぎわいました`, { important: visit >= 80000, tid: G.user.tid });
+    }
+  }
+  tw.events = tw.events.filter(e => e.wk > 0);
+}
+
+/* ---------- 民間の開発（街が自然に育つ） ---------- */
+const DEV_START = 50, DEV_COST = 200, DEV_MAX = 300;
+function privateDevelopment() {
+  const tw = G.town;
+  tw.dev = clamp((tw.dev || 0) * 0.994 + Math.max(0, tw.stat.vib - (tw.stat.evVib || 0) - 10) * 0.05, 0, DEV_MAX);
+  const free = tw.cells.filter(c => !c.own && !c.sp && !c.pv);
+  if (!free.length) return;
+  const p = Math.min(0.3, ((tw.dev || 0) - DEV_START) / 500);
+  if (p <= 0 || !chance(p)) return;
+  const dist = c => Math.min(Math.abs(c.x - STAD_XY[0]) + Math.abs(c.y - STAD_XY[1]), Math.abs(c.x - STATION_XY[0]) + Math.abs(c.y - STATION_XY[1]));
+  const c = wpick(free, x => 1 / (1 + dist(x)));
+  const near = dist(c) <= 1;
+  const hotels = tw.cells.filter(x => x.pv && x.pv.k === 'bizhotel').length;
+  const k = wpick(Object.keys(PRIV_BLD), x => ({ house: near ? 1 : 4, shop: 3, cafe: near ? 4 : 1.5, izakaya: near ? 4 : 1.5, office: tw.stat.vib >= 40 ? 2.5 : 0.8, bizhotel: tw.stat.vib >= 50 && hotels < 2 ? 2 : 0.2 })[x]);
+  c.pv = { k, y: G.year };
+  tw.dev -= DEV_COST;
+  computeTownStats();
+  addNews('town', `球場の近くに${PRIV_BLD[k].n}ができました。街が少しずつ発展しています`, { tid: G.user.tid });
+}
+function buyoutPrice(c) { return Math.round(landPrice(c) * 2); }
+function buyOutPrivate(c) {
+  if (!c.pv) return false;
+  const p = buyoutPrice(c); if (G.fin.cash < p) return false;
+  book('exp', 'land', p); G.fin.capexY = (G.fin.capexY || 0) + p;
+  const n = PRIV_BLD[c.pv.k].n; c.pv = null; c.own = true; computeTownStats();
+  addNews('town', `${n}の区画を${fmtOku(p)}で買い取り、再開発用地にしました`, { tid: G.user.tid });
+  return true;
 }
 function townWeeklyRevenue(season) {
   let r = 0;
@@ -2429,7 +2594,10 @@ function townWeeklyRevenue(season) {
 }
 function townWeekly() {
   const tw = G.town;
-  tw.attach = clamp(tw.attach + adEffect('attach') + BLD_EFFECT('attach') * 0.004 - (tw.attach - 30) * 0.002, 0, 100);
+  townEventsWeekly();
+  privateDevelopment();
+  computeTownStats();
+  tw.attach = clamp(tw.attach + adEffect('attach') + BLD_EFFECT('attach') * 0.004 + tw.cells.filter(c => c.pv && PRIV_BLD[c.pv.k].attach).length * 0.004 - (tw.attach - 30) * 0.002 - Math.max(0, tw.attach - 60) * 0.004, 0, 100);
   uT().fans += tw.stat.fans * 0.05;
 }
 
@@ -3704,30 +3872,53 @@ function defaultBudget(T) {
   return { scout: 15000 + T.market * 2000, dev: 20000 + T.market * 3000, sales: 15000 + T.market * 2000, ads: 60000 + T.market * 10000, capex: 100000 + T.market * 20000 };
 }
 
+/* カスタムスタートの設定から難易度（★1〜5）を見積もる */
+function customStars(c) {
+  const sc = (c.market - 3) * 0.6 + CUSTOM_STR[c.str].off / 2.5 * 0.6 + (c.pop - 55) / 20 * 0.5 + (c.cash - 250000) / 250000 * 0.4 - CUSTOM_AI[c.ai].off / 2 * 0.4 + (c.owned ? 0.3 : 0) + (c.fac - 2) * 0.15;
+  return clamp(Math.round(3 - sc), 1, 5);
+}
+function applyCustomDef(d, C) {
+  const baseCap = d.cap, baseDome = d.dome;
+  d.city = (C.city || d.city).slice(0, 8); d.nick = (C.nick || d.nick).slice(0, 12); d.kanji = (C.kanji || d.kanji).slice(0, 1);
+  d.color = C.color || d.color; d.color2 = C.color2 || d.color2; d.parent = (C.parent || d.parent).slice(0, 20);
+  d.stadium = (C.stadium || d.stadium).slice(0, 20); d.cap = clamp(+C.cap || d.cap, 10000, 60000); d.dome = !!C.dome;
+  d.market = clamp(+C.market || d.market, 1, 5); d.pop = clamp(+C.pop || d.pop, 5, 95);
+  d.cash = Math.max(0, +C.cash || 0); d.fac = clamp(+C.fac, 0, 5); d.owned = !!C.owned;
+  d.rent = Math.round(d.rent * (d.cap / baseCap) * (d.dome ? 1.4 : 1) / (baseDome ? 1.4 : 1));
+  if (d.dome && !baseDome) d.hrF = 1.04;
+  d.shift = CUSTOM_STR[C.str].off / 0.4;
+  d.region = C.region != null ? +C.region : d.region;
+  d.star = customStars(C);
+}
 function newGame(o) {
   setSeed(o.seed || ((Date.now() ^ (Math.random() * 1e9)) >>> 0));
   NAMESET = new Set();
+  const C = o.custom || null;
+  const y0 = C && C.year ? clamp(Math.round(+C.year), 1950, 2200) : START_YEAR;
   G = {
-    v: 1, year: START_YEAR, month: 1, week: 1, nid: 1, sid: 1, gid: 1, dayNo: 0, stamp: 0,
+    v: 1, year: y0, startYear: y0, month: 1, week: 1, nid: 1, sid: 1, gid: 1, dayNo: 0, stamp: 0,
     teams: [], players: {}, staff: {}, staffPool: [], prospects: [], foreign: [], fapool: [], faMarket: [], compPending: [],
     news: [], pending: [], evCool: {}, boxes: {}, boxOrder: [], hist: { seasons: [], user: [] }, legends: [], retiredCoaches: [], mlb: [], trades: [],
     flags: {}, post: null, draft: null, sched: null, day: 0, weekly: null, gameOver: null
   };
-  TEAM_DEFS.forEach((d, i) => G.teams.push(makeTeam(d, i)));
+  const defs = TEAM_DEFS.map(d => Object.assign({}, d));
+  if (C) applyCustomDef(defs[o.team], C);
+  defs.forEach((d, i) => G.teams.push(makeTeam(d, i)));
   const T = G.teams[o.team];
   if (o.nick) T.nick = o.nick;
   G.user = {
     tid: T.id, name: o.name || '球団社長', policy: o.policy || 'balance', lineupMode: 'auto', manual: { lu: [], rot: [], su: [], cl: null },
-    train: 'normal', autoSwap: true, autoRoster: false, showWeekly: true, theme: 'night', tutorial: true
+    train: 'normal', autoSwap: true, autoRoster: false, showWeekly: true, theme: 'night', tutorial: true,
+    ownerMode: C ? C.owner : 'normal', custom: !!C
   };
   for (const t of G.teams) genRoster(t);
-  const d = TEAM_DEFS[T.id]; const fl = d.fac;
+  const d = defs[T.id]; const fl = d.fac;
   const f = (lv) => ({ lv: Math.max(0, lv), cond: ri(72, 92) });
-  G.stad = { name: d.stadium, cap: d.cap, dome: d.dome, hrF: d.hrF, owned: false, rent: d.rent, age: ri(18, 40), honey: 1,
+  G.stad = { name: d.stadium, cap: d.cap, dome: d.dome, hrF: d.hrF, owned: !!d.owned, rent: d.owned ? 0 : d.rent, age: C ? ri(5, 30) : ri(18, 40), honey: 1,
     fac: { seats: { lv: 0, cond: 100 }, vision: f(fl), food: f(fl), shop: f(fl), vip: f(fl - 1), amenity: f(fl), light: f(fl), turf: f(fl) } };
   G.tfac = { gym: f(fl), indoor: f(Math.max(1, fl - 1)), bullpen: f(fl), farm: f(fl), dorm: f(fl), medical: f(fl), analytics: f(fl - 1) };
   G.builds = []; G.project = null;
-  initTown(T);
+  initTown(T, C ? C.town : 'normal', C ? C.land : 'normal');
   G.fin = { cash: d.cash, y: { rev: {}, exp: {} }, m: { rev: 0, exp: 0 }, months: [], hist: [], loans: [], att: { g: 0, tot: 0, max: 0, sell: 0, list: [] }, lastRev: 400000 + d.market * 300000, lastAtt: 0, awayWeek: 0, capexY: 0 };
   const rm = tixRefMul(T);
   G.tix = { out: Math.round(TIX.out.ref * rm / 100) * 100, inn: Math.round(TIX.inn.ref * rm / 100) * 100, pre: Math.round(TIX.pre.ref * rm / 500) * 500 };
@@ -3744,10 +3935,12 @@ function newGame(o) {
   G.sponsors.offers.push(...genSponsorOffers('helmet', 2), ...genSponsorOffers('partner2', 1));
   G.naming = { main: null, farm: null, offers: [], solicit: 0, solicitKind: 'main' };
   G.owner = { trust: 55, startPop: T.pop, review: null, msgs: [] };
-  G.plan = { goals: [], start: START_YEAR, end: START_YEAR + 2, set: false };
+  G.plan = { goals: [], start: G.year, end: G.year + 2, set: false };
   G.camp = null; G.fallCamp = { on: true, theme: 'balance' }; G.winter = [];
   for (const t of G.teams) {
-    normalizeTeam(t, 63 + t.shift * 0.4 + rf(-0.5, 0.5));
+    let target = 63 + t.shift * 0.4 + rf(-0.5, 0.5);
+    if (C) target = t.id === T.id ? 63 + CUSTOM_STR[C.str].off + rf(-0.3, 0.3) : target + CUSTOM_AI[C.ai].off;
+    normalizeTeam(t, target);
     t.payBudget = aiPayBudget(t); autoRoster(t.id);
     const pay = teamPayroll(t.id); const lim = t.payBudget * 0.76;
     const f = clamp(lim / pay, 0.6, 2.2);
@@ -3939,7 +4132,7 @@ function yearEnd() {
   F.lastRev = rev0; F.lastAtt = F.att.tot;
   G.hist.user.push({ y: G.year, rank: T.lastRank, w: T.rec.w, l: T.rec.l, d: T.rec.d, lg: G.post && G.post.lgChamp.includes(T.id), champ: G.post && G.post.champ === T.id, att: F.att.tot, net: Math.round(yearTotal('rev') - yearTotal('exp')), trust: G.owner.trust });
   G.owner.review = review;
-  if (G.owner.trust <= 5) {
+  if (G.user.ownerMode !== 'none' && G.owner.trust <= (G.user.ownerMode === 'hard' ? 10 : 5)) {
     G.gameOver = { y: G.year, why: 'オーナーの信頼を失い、球団社長を解任されました' };
     addNews('owner', 'オーナー会議の結果、球団社長の解任が決まりました', { important: true, tid: T.id });
   }
@@ -3969,6 +4162,8 @@ function ownerReview(net) {
   const pl = planYearCheck(); if (pl.d) { d += pl.d; notes.push(...pl.notes); }
   if (G.fin.cash < 0) { const v = -Math.min(10, Math.round(-G.fin.cash / 100000 * 2) + 2); d += v; notes.push(['資金繰りの悪化', v]); }
   const over = (G.fin.capexY || 0) - G.budget.capex; if (over > 20000) { const v = -Math.min(5, Math.round(over / 50000) + 1); d += v; notes.push(['設備投資が予算超過', v]); }
+  const om = CUSTOM_OWNER[G.user.ownerMode || 'normal'] || CUSTOM_OWNER.normal;
+  if (om.k !== 1) { for (const n of notes) if (n[1] < 0) n[1] = Math.round(n[1] * om.k); d = sum(notes, n => n[1]); }
   G.owner.trust = clamp(60 + (G.owner.trust - 60) * 0.9 + d, 0, 100);
   G.owner.startPop = T.pop;
   return { y: G.year, d, notes, net, trust: G.owner.trust };
@@ -3980,6 +4175,7 @@ function newYear() {
   for (const id in G.players) { const p = G.players[id]; p.rel = null; p.ls = -99; p.fat = 0; p.ms = p.ms || null; if (p.adapt > 0) p.adapt = 0; }
   G.post = null; G.draft = null; G.awards = null; G.seasonTitles = null;
   G.faMarket = [];
+  G.town.visitY = 0;
   G.fin.y = { rev: {}, exp: {} }; G.fin.att = { g: 0, tot: 0, max: 0, sell: 0, list: [] }; G.fin.capexY = 0; G.fin.projY = 0; G.fin.rainouts = 0;
   G.flags.foodBoost = 0;
   G.camp = null;
@@ -4077,6 +4273,11 @@ function userTasks() {
   if (G.fin.cash < 0) add('cash', '資金がマイナスです。融資や経費削減を検討してください', 'finance', true);
   if (G.owner.trust < 20) add('trust', 'オーナーの信頼が低下しています', 'plan', true);
   if (t >= 40 && G.user.lastSeenWinter !== G.year && t <= 46) add('winter', '若手をウィンターリーグへ派遣できます（12月）', 'training');
+  if (G.week <= 2) {
+    const pm = G.month === 1 ? 12 : G.month - 1;
+    const season = Object.entries(TOWN_EVENTS).filter(([k, d]) => d.months && d.months.includes(G.month) && !d.months.includes(pm) && eventCanHost(k).ok);
+    if (season.length) { add('townev', `${season.map(([k, d]) => d.n).join('・')}を開ける時期です。街に人を呼びましょう`, 'town'); out[out.length - 1].tab = 'ev'; }
+  }
   return out;
 }
 
@@ -4258,7 +4459,15 @@ function renderHeader() {
   </header>`;
 }
 function renderScreen() { const f = SCREENS[UI.screen] || SCREENS.home; try { return f(); } catch (e) { console.error(e); return `<div class="panel"><div class="panel-b">画面の表示中にエラーが発生しました：${esc(e.message)}</div></div>`; } }
+/* 描画中に change/blur から render が呼ばれても二重に書き換えない */
+let RENDERING = false, RENDER_AGAIN = false;
 function render() {
+  if (RENDERING) { RENDER_AGAIN = true; return; }
+  RENDERING = true;
+  try { renderNow(); } finally { RENDERING = false; }
+  if (RENDER_AGAIN) { RENDER_AGAIN = false; render(); }
+}
+function renderNow() {
   const app = document.getElementById('app');
   applyTheme();
   if (!G || UI.screen === 'title') { app.innerHTML = SCREENS.title(); renderModalRoot(); if (UI.resetScroll) { window.scrollTo(0, 0); UI.resetScroll = false; } return; }
@@ -4368,6 +4577,7 @@ SCREENS.title = () => {
   if (s.step === 1) return titleTeams();
   if (s.step === 2) return titleSetup();
   if (s.step === 3) return titleLoad();
+  if (s.step === 4) return titleCustom();
   return `<div class="title"><div class="title-board">
     <h1>球団社長</h1>
     <p>プロ野球経営シミュレーション</p>
@@ -4398,7 +4608,7 @@ function titleTeams() {
     </button>`;
   }).join('');
   return `<div class="main" style="max-width:1200px;margin:0 auto"><h1 class="h1">球団を選ぶ</h1><p class="lead">難易度が低いほど資金と人気があり、戦力も整っています。地方の小さな球団を強くするのも醍醐味です。</p>
-    <div class="teamgrid">${cards}</div>
+    <div class="teamgrid">${cards}<button class="tcard custom" data-a="tCustom"><div class="nm">カスタムスタート</div><div class="small muted">球団名・色・球場・資金・戦力・街の状態・オーナーの厳しさまで、自分で決めて始めます。${s.team != null ? `<br>選んでいる「${esc(TEAM_DEFS[s.team].city + TEAM_DEFS[s.team].nick)}」をひな形にします。` : ''}</div></button></div>
     <div class="row" style="margin-top:18px"><button class="btn" data-a="tBack">戻る</button><button class="btn pri" data-a="tNext" ${s.team == null ? 'disabled' : ''}>この球団で始める</button></div></div>`;
 }
 function titleSetup() {
@@ -4414,7 +4624,7 @@ function titleSetup() {
 }
 ACT.tNew = () => { UI.title.step = 1; UI.resetScroll = true; render(); };
 ACT.tLoadMenu = () => { UI.title.step = 3; render(); };
-ACT.tBack = () => { UI.title.step = Math.max(0, UI.title.step === 3 ? 0 : UI.title.step - 1); render(); };
+ACT.tBack = () => { const st = UI.title.step; UI.title.step = st === 3 ? 0 : st === 4 ? 1 : Math.max(0, st - 1); UI.resetScroll = true; render(); };
 ACT.tPick = el => { UI.title.team = +el.dataset.v; render(); };
 ACT.tNext = () => { if (UI.title.team == null) return; UI.title.step = 2; UI.resetScroll = true; render(); };
 ACT.tName = el => { UI.title.name = el.value; };
@@ -4423,6 +4633,102 @@ ACT.tPol = el => { UI.title.policy = el.value; };
 ACT.tStart = () => {
   const s = UI.title;
   newGame({ team: s.team, name: s.name.trim() || '球団社長', nick: s.nick.trim() || null, policy: s.policy });
+  try { G.user.theme = localStorage.getItem('kyudan_theme') || 'night'; } catch (e) { }
+  UI.screen = 'home'; UI.resetScroll = true; UI.title = { step: 0, team: null, name: '', nick: '', policy: 'balance' };
+  render(); openModal('welcome'); autosave();
+};
+/* ---------- カスタムスタート ---------- */
+const CS_NICKS = [['グリフォンズ', '鷲'], ['ペガサス', '翼'], ['コメッツ', '彗'], ['オーシャンズ', '海'], ['ボルケーノズ', '炎'], ['ミーティアーズ', '星'],
+  ['アルバトロス', '翔'], ['ブリザーズ', '雪'], ['サンライズ', '旭'], ['クラウンズ', '冠'], ['フォレスターズ', '森'], ['トルネーズ', '嵐']];
+const CS_COLORS = [['#0F5BA7', '#F2C230'], ['#1E7B4A', '#F4EBD0'], ['#B3122E', '#1B1B1B'], ['#F07F1A', '#20304F'], ['#5B2C83', '#E8C35A'],
+  ['#14A3C7', '#FFFFFF'], ['#2B2B2B', '#D4A017'], ['#C2185B', '#FCE4EC'], ['#00897B', '#FFD54F'], ['#8D1C1C', '#E9D8A6']];
+const CS_CASH = [50000, 100000, 200000, 350000, 500000, 1000000];
+function csFrom(i) {
+  const d = TEAM_DEFS[i];
+  return { base: i, city: d.city, nick: d.nick, kanji: d.kanji, color: d.color, color2: d.color2, parent: d.parent, region: d.region,
+    stadium: d.stadium, cap: d.cap, dome: d.dome, owned: false, fac: d.fac, cash: d.cash, market: d.market, pop: d.pop,
+    str: 'n', ai: 'n', town: 'normal', land: 'normal', owner: 'normal', year: START_YEAR };
+}
+function csNorm(c) {
+  const t = v => String(v || '').trim();
+  const nick = t(c.nick), kanji = t(c.kanji) || nick.slice(0, 1) || '球';
+  return Object.assign({}, c, { city: t(c.city), nick, kanji: Array.from(kanji)[0], parent: t(c.parent) || t(c.city) + 'ホールディングス', stadium: t(c.stadium) || t(c.city) + 'スタジアム',
+    cap: clamp(Math.round(+c.cap || 30000), 15000, 55000), pop: clamp(Math.round(+c.pop || 50), 20, 90), market: clamp(+c.market || 3, 1, 5), fac: clamp(+c.fac || 2, 1, 5), cash: Math.max(0, +c.cash || 0),
+    region: clamp(+c.region || 0, 0, REGIONS.length - 1), year: clamp(Math.round(+c.year || START_YEAR), 1950, 2200) });
+}
+function csRandomize(c) {
+  const rp = a => a[Math.floor(Math.random() * a.length)];
+  c.region = Math.floor(Math.random() * REGIONS.length);
+  c.city = rp(PLACES[c.region]);
+  const [nk, kj] = rp(CS_NICKS); c.nick = nk; c.kanji = kj;
+  const [c1, c2] = rp(CS_COLORS); c.color = c1; c.color2 = c2;
+  c.parent = c.city + rp(['電鉄', 'フーズ', 'ガス', '信用金庫', '通信', '観光', 'ホールディングス', '製菓']);
+  c.stadium = c.dome ? c.city + 'ドーム' : c.city + rp(['スタジアム', 'ボールパーク', '市民球場', 'フィールド']);
+}
+function csPlate(c) {
+  const n = csNorm(c); const T = { color: n.color, color2: n.color2, kanji: n.kanji };
+  const b = TEAM_DEFS[n.base]; const st = customStars(n);
+  return `<div class="cs-plate" style="--c:${n.color};--c2:${n.color2}">${emblem(T, 84)}<div class="nm">${esc(n.city || '（都市名）')}${esc(n.nick || '（愛称）')}</div>
+    <div class="sub">${LEAGUES[b.league]}　${esc(n.stadium)}</div></div>
+    <div class="panel"><div class="panel-b"><dl class="kv">
+      <dt>難易度の目安</dt><dd>${stars(st)}</dd>
+      <dt>本拠地</dt><dd>${comma(n.cap)}人・${n.dome ? 'ドーム' : '屋外'}・${n.owned ? '自前' : '借りる'}</dd>
+      <dt>資金</dt><dd>${fmtOku(n.cash)}</dd>
+      <dt>戦力</dt><dd>${CUSTOM_STR[n.str].n}／他球団 ${CUSTOM_AI[n.ai].n}</dd>
+      <dt>街</dt><dd>${CUSTOM_TOWN[n.town].n}・土地${CUSTOM_LAND[n.land].n}</dd>
+      <dt>オーナー</dt><dd>${CUSTOM_OWNER[n.owner].n}</dd>
+      <dt>開始</dt><dd>${n.year}年</dd>
+    </dl><p class="small" style="margin:10px 0 0">オーナーの期待：「${ownerHope({ star: st })}」</p></div></div>`;
+}
+function csRefresh() { const el = document.getElementById('csSide'); if (el) el.innerHTML = csPlate(UI.title.c); }
+function titleCustom() {
+  const s = UI.title; const c = s.c || (s.c = csFrom(s.team != null ? s.team : 7));
+  const f = (label, html, note) => `<div class="cf"><div class="cf-l">${label}</div><div class="cf-v">${html}${note ? `<div class="note">${note}</div>` : ''}</div></div>`;
+  const txt = (k, max, w) => `<input class="inp" ${w ? `style="flex:0 0 ${w}"` : ''} maxlength="${max}" value="${esc(c[k])}" data-i="csTxt" data-k="${k}" aria-label="${k}">`;
+  const sg = (k, opts) => seg('csSet', opts, typeof c[k] === 'boolean' ? (c[k] ? 1 : 0) : c[k], `data-k="${k}"`);
+  const rng = (k, min, max, step, fmt) => `<input type="range" min="${min}" max="${max}" step="${step}" value="${c[k]}" data-i="csNum" data-k="${k}" aria-label="${k}"><output data-out="${k}">${fmt(c[k])}</output>`;
+  const pol = Object.entries(POLICIES).map(([k, p]) => `<label class="lot-row" style="cursor:pointer"><input type="radio" name="pol" value="${k}" ${s.policy === k ? 'checked' : ''} data-c="tPol"><div><b>${p.n}</b><div class="small muted">${p.d}</div></div></label>`).join('');
+  const objOpts = o => Object.entries(o).map(([k, v]) => [k, v.n]);
+  return `<div class="main" style="max-width:1120px;margin:0 auto"><h1 class="h1">カスタムスタート</h1>
+    <p class="lead">選んだ球団の枠（リーグと日程）を使って、自分だけの球団を立ち上げます。決めた内容はプレートにすぐ反映されます。</p>
+    <div class="cs"><div class="stack">
+    ${panel('球団', f('ひな形', `<select class="inp" data-c="csBase">${TEAM_DEFS.map((d, i) => opt(i, `${d.city}${d.nick}（${LEAGUES[d.league]}）`, c.base)).join('')}</select>`, 'この球団の枠を置き換えます。選び直すと名前や球場などの設定を読み込み直します。') +
+      f('都市名', txt('city', 8)) + f('愛称', txt('nick', 12)) + f('マークの文字', txt('kanji', 2, '4.5em'), '漢字1文字がおすすめです') +
+      f('チームカラー', `<input type="color" value="${esc(c.color)}" data-i="csTxt" data-k="color" aria-label="メインカラー"><span class="small muted">メイン</span><input type="color" value="${esc(c.color2)}" data-i="csTxt" data-k="color2" aria-label="サブカラー"><span class="small muted">サブ</span>`) +
+      f('親会社', txt('parent', 20)) +
+      f('本拠地の地域', `<select class="inp" data-c="csSel" data-k="region">${REGIONS.map((r, i) => opt(i, r, c.region)).join('')}</select>`, '地元出身の有望株やスカウトの担当地域に関わります'),
+      { act: '<button class="btn sm" data-a="csRandom">名前と色をおまかせ</button>' })}
+    ${panel('球場', f('球場名', txt('stadium', 20)) + f('収容人数', rng('cap', 15000, 55000, 1000, v => comma(v) + '人')) +
+      f('屋根', sg('dome', [[0, '屋外'], [1, 'ドーム']]), 'ドームは雨天中止がなく、使用料が高めです') +
+      f('持ち主', sg('owned', [[0, '借りる'], [1, '自前で保有']]), '自前なら使用料がかからず、維持費がかかります') +
+      f('設備の水準', sg('fac', [[1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5']]), '球場とトレーニング施設の最初のレベル'))}
+    ${panel('お金と人気', f('資金', sg('cash', CS_CASH.map(v => [v, fmtOku(v).replace('円', '')]))) +
+      f('市場規模', sg('market', [[1, '1 小'], [2, '2'], [3, '3'], [4, '4'], [5, '5 大']]), '都市の大きさ。観客・スポンサー・放映権の土台になります') +
+      f('人気', rng('pop', 20, 90, 1, v => v)))}
+    ${panel('戦力', f('自分の球団', sg('str', objOpts(CUSTOM_STR))) + f('ほかの11球団', sg('ai', objOpts(CUSTOM_AI))))}
+    ${panel('街', f('球場の周り', sg('town', objOpts(CUSTOM_TOWN)), CUSTOM_TOWN[c.town].d) + f('最初の土地', sg('land', objOpts(CUSTOM_LAND)), CUSTOM_LAND[c.land].d))}
+    ${panel('ルール', f('オーナー', sg('owner', objOpts(CUSTOM_OWNER)), CUSTOM_OWNER[c.owner].d) +
+      f('開始年', `<input class="inp num" type="number" min="1950" max="2200" style="flex:0 0 7em" value="${c.year}" data-c="csYear" aria-label="開始年"><span class="small muted">年</span>`))}
+    ${panel('あなた', f('名前', `<input class="inp" maxlength="16" placeholder="球団社長" value="${esc(s.name)}" data-i="tName" aria-label="あなたの名前">`) + `<div class="lot" style="margin-top:10px">${pol}</div>`)}
+    <div class="row"><button class="btn" data-a="tBack">戻る</button><button class="btn pri" data-a="csStart">この球団で始める</button></div>
+    </div><aside class="cs-side" id="csSide">${csPlate(c)}</aside></div></div>`;
+}
+ACT.tCustom = () => { const s = UI.title; if (!s.c || (s.team != null && s.c.base !== s.team)) s.c = csFrom(s.team != null ? s.team : 7); s.step = 4; UI.resetScroll = true; render(); };
+ACT.csBase = el => { const o = UI.title.c; UI.title.c = Object.assign(csFrom(+el.value), { str: o.str, ai: o.ai, town: o.town, land: o.land, owner: o.owner, year: o.year }); UI.title.team = +el.value; render(); };
+ACT.csTxt = el => { UI.title.c[el.dataset.k] = el.value; csRefresh(); };
+ACT.csNum = el => { const k = el.dataset.k; UI.title.c[k] = +el.value; const o = document.querySelector(`output[data-out="${k}"]`); if (o) o.textContent = k === 'cap' ? comma(+el.value) + '人' : el.value; csRefresh(); };
+ACT.csSel = el => { UI.title.c[el.dataset.k] = +el.value; render(); };
+ACT.csSet = el => {
+  const k = el.dataset.k; let v = el.dataset.v;
+  if (k === 'dome' || k === 'owned') v = v === '1'; else if (k === 'fac' || k === 'cash' || k === 'market') v = +v;
+  UI.title.c[k] = v; render();
+};
+ACT.csYear = el => { UI.title.c.year = clamp(Math.round(+el.value || START_YEAR), 1950, 2200); render(); };
+ACT.csRandom = () => { csRandomize(UI.title.c); render(); };
+ACT.csStart = () => {
+  const s = UI.title; const c = csNorm(s.c);
+  if (!c.city || !c.nick) { toast('都市名と愛称を入れてください', 'bad'); return; }
+  newGame({ team: c.base, name: s.name.trim() || '球団社長', policy: s.policy, custom: c });
   try { G.user.theme = localStorage.getItem('kyudan_theme') || 'night'; } catch (e) { }
   UI.screen = 'home'; UI.resetScroll = true; UI.title = { step: 0, team: null, name: '', nick: '', policy: 'balance' };
   render(); openModal('welcome'); autosave();
@@ -4568,7 +4874,7 @@ MODALS.review = () => {
     <p class="small muted">新しい年が始まりました。予算・中期計画・キャンプを確認しましょう。</p>`,
     foot: '<button class="btn" data-a="go" data-v="plan">中長期計画へ</button><button class="btn pri" data-a="closeModal">閉じる</button>' };
 };
-MODALS.gameover = () => ({ title: '球団社長を解任されました', size: 'narrow', body: `<p>${esc(G.gameOver.why)}。</p><p class="muted">在任：${START_YEAR}年〜${G.gameOver.y}年</p>`,
+MODALS.gameover = () => ({ title: '球団社長を解任されました', size: 'narrow', body: `<p>${esc(G.gameOver.why)}。</p><p class="muted">在任：${G.startYear || START_YEAR}年〜${G.gameOver.y}年</p>`,
   foot: '<button class="btn" data-a="go" data-v="records">球団史を見る</button><button class="btn pri" data-a="toTitle">タイトルへ</button>' });
 ACT.toTitle = () => { closeAllModals(); UI.screen = 'title'; UI.title.step = 0; G = null; render(); };
 
@@ -4576,7 +4882,7 @@ ACT.toTitle = () => { closeAllModals(); UI.screen = 'title'; UI.title.step = 0; 
 SCREENS.home = () => {
   const T = uT(); const ut = T.id; const t = curTurn(); const R = T.rec;
   const tasks = userTasks();
-  const taskHtml = tasks.length ? `<ul class="tasks">${tasks.map(x => `<li><span>${x.urgent ? '<span class="dot o"></span> ' : '<span class="dot s"></span> '}${esc(x.t)}</span><button class="btn sm" data-a="${x.go === 'event' ? 'openEvent' : 'go'}" data-v="${x.go}">開く</button></li>`).join('')}</ul>` : '<div class="empty">いま急ぎの用事はありません。「次の週へ」で進めましょう。</div>';
+  const taskHtml = tasks.length ? `<ul class="tasks">${tasks.map(x => `<li><span>${x.urgent ? '<span class="dot o"></span> ' : '<span class="dot s"></span> '}${esc(x.t)}</span><button class="btn sm" data-a="${x.go === 'event' ? 'openEvent' : 'go'}" data-v="${x.go}" ${x.tab ? `data-tab="${x.tab}"` : ''}>開く</button></li>`).join('')}</ul>` : '<div class="empty">いま急ぎの用事はありません。「次の週へ」で進めましょう。</div>';
   const recent = G.boxOrder.slice(-6).reverse().map(id => G.boxes[id]).filter(Boolean);
   const recentHtml = recent.length ? recent.map(miniGame).join('') : `<div class="empty">${t < SEASON_START ? `開幕は3月第4週です（あと${SEASON_START - t}週）` : 'まだ試合がありません'}</div>`;
   const st = standings(T.league);
@@ -5676,20 +5982,38 @@ ACT.promoDel = el => { const i = G.promo.queue.lastIndexOf(el.dataset.k); if (i 
 /* ---------- 街づくり ---------- */
 SCREENS.town = () => {
   const tw = G.town; const st = tw.stat;
+  const tab = getTab('town', 'map');
+  const nEv = (tw.events || []).length;
+  const stg = townStage();
+  const head = `<h1 class="h1">街づくり</h1><p class="lead">球場の周りに街をつくり、観客が来やすく、試合がない日も人が集まる「ボールパーク」を目指します。イベントで人を呼ぶと、空いている土地に民間の店や住宅が建ち、街が自然に育っていきます。</p>
+  <div class="panel" style="margin-bottom:16px">${tiles([['街の段階', stg.n, '段階 ' + stg.i + '／' + TOWN_STAGES.length, 'txt'], ['アクセス', st.acc], ['賑わい', st.vib, st.evVib ? `うちイベント +${st.evVib}` : ''], ['住民', fmtPeople(Math.round(st.pop))], ['地域の愛着', Math.round(tw.attach)], ['発展の勢い', Math.round(tw.dev || 0), (tw.dev || 0) >= DEV_START ? '民間の開発が進行中' : DEV_START + 'で民間の開発が始まる'], ['地価', '×' + tw.landIdx.toFixed(2)], ['街の収入', fmtOku(townWeeklyRevenue(curTurn() >= 11 && curTurn() <= 38)) + '／週']])}</div>
+  ${tabs('town', [['map', '区画と建物'], ['ev', '街のイベント', nEv || null]], tab)}`;
+  return head + (tab === 'ev' ? townEventsView() : townMapView());
+};
+function townMapView() {
+  const tw = G.town;
   const sel = UI.sel.cell != null ? tw.cells[UI.sel.cell] : null;
   const grid = tw.cells.map((c, i) => {
     let ic = '', lb = '', cls = c.own ? 'own' : '';
     if (c.sp === 'stadium') { ic = '🏟️'; lb = '本拠地'; cls += ' stadium'; }
     else if (c.sp === 'station') { ic = '🚉'; lb = '最寄り駅'; cls += ' station'; }
+    else if (c.pv) { ic = PRIV_BLD[c.pv.k].i; lb = PRIV_BLD[c.pv.k].n; cls += ' priv'; }
     else if (c.b) { ic = BLD[c.b.k].i; lb = c.b.wk ? `工事中 ${c.b.wk}週` : BLD[c.b.k].n; if (c.b.wk) cls += ' wip'; }
     else { ic = c.own ? '<span style="color:var(--lamp)">＋</span>' : ''; lb = c.own ? '空き地' : '売地 ' + fmtOku(landPrice(c)).replace('円', ''); }
     return `<button class="cell ${cls} ${UI.sel.cell === i ? 'sel' : ''}" data-a="cell" data-i="${i}" aria-label="${esc(lb)}">${c.b && c.b.lv > 1 ? `<span class="lvb">Lv${c.b.lv}</span>` : ''}<span class="ic">${ic}</span><span class="lb">${esc(lb)}</span></button>`;
   }).join('');
-  let side = '<p class="muted">区画を選ぶと、土地の購入や建物の建設ができます。球場の周り（隣接8マス）は飲食や商業の効果が2割増しです。</p>';
+  let side = '<p class="muted">区画を選ぶと、土地の購入や建物の建設ができます。球場の周り（隣接8マス）は飲食や商業の効果が2割増しです。</p><p class="small muted">「民」の印は、街の発展で民間が建てた建物です。賑わいや住民を増やしてくれます。</p>';
   if (sel) {
     if (sel.sp === 'stadium') side = `<p><b>${esc(stadiumName())}</b></p><button class="btn" data-a="go" data-v="stadium">球場・設備へ</button>`;
     else if (sel.sp === 'station') side = '<p>既存の最寄り駅です。駅からのアクセスは「シャトルバス乗り場」や「新駅」で改善できます。</p>';
-    else if (!sel.own) side = `<p>民有地です。購入すると建物を建てられます。</p><dl class="kv"><dt>土地の価格</dt><dd>${fmtOku(landPrice(sel))}</dd></dl><button class="btn pri" style="margin-top:10px" data-a="buyLand" ${G.fin.cash >= landPrice(sel) ? '' : 'disabled'}>購入する</button><p class="small muted">街が賑わうほど地価は上がります。</p>`;
+    else if (sel.pv) {
+      const d = PRIV_BLD[sel.pv.k]; const bp = buyoutPrice(sel);
+      const fx = [d.vib ? `賑わい+${d.vib}` : '', d.pop ? `住民+${comma(d.pop)}` : '', d.attach ? '地域の愛着がじわじわ上がる' : '', d.food ? '飲食売上+' + Math.round(d.food * 100) + '%' : '', d.fans ? 'ファンが少し増える' : ''].filter(Boolean).join('　');
+      side = `<p><b>${d.i} ${d.n}</b>（民間・${sel.pv.y}年〜）</p><p class="small muted">街の発展で民間が建てた建物です。球団にお金はかかりません。</p><div class="evfx">${fx}</div>
+        <dl class="kv" style="margin-top:10px"><dt>買い取り価格</dt><dd>${fmtOku(bp)}</dd></dl>
+        <button class="btn" style="margin-top:10px" data-a="buyPriv" ${G.fin.cash >= bp ? '' : 'disabled'}>買い取って球団の土地にする</button><p class="small muted">買い取ると建物はなくなり、上の効果も消えます。大きな施設を建てたいときに。</p>`;
+    }
+    else if (!sel.own) side = `<p>民有地です。購入すると建物を建てられます。</p><dl class="kv"><dt>土地の価格</dt><dd>${fmtOku(landPrice(sel))}</dd></dl><button class="btn pri" style="margin-top:10px" data-a="buyLand" ${G.fin.cash >= landPrice(sel) ? '' : 'disabled'}>購入する</button><p class="small muted">街が賑わうほど地価は上がります。放っておくと民間の建物が建つこともあります。</p>`;
     else if (sel.b) {
       const d = BLD[sel.b.k]; const up = sel.b.lv < 3 && !sel.b.wk;
       side = `<p><b>${d.i} ${d.n}</b> Lv${sel.b.lv}${sel.b.wk ? `（工事中・残り${sel.b.wk}週）` : ''}</p><p class="small muted">${d.d}</p>${bldEffects(d, bldMul(sel.b))}
@@ -5698,10 +6022,36 @@ SCREENS.town = () => {
       side = `<p class="small muted">球団の空き地です。建てる施設を選んでください。${nearStadium(sel) ? '<b>球場隣接のため飲食・商業の効果が2割増し。</b>' : ''}</p><div class="lot">${Object.entries(BLD).map(([k, d]) => { const c = canBuild(sel, k); return `<div class="lot-row"><span style="font-size:22px">${d.i}</span><div style="flex:1"><b>${d.n}</b> <span class="small muted">${fmtOku(d.cost)}・${d.wk}週・維持${fmtOku(d.maint)}/週</span><div class="small muted">${d.d}</div>${bldEffects(d, 1)}</div><button class="btn sm pri" data-a="bld" data-k="${k}" ${c.ok ? '' : `disabled title="${esc(c.why)}"`}>建てる</button></div>`; }).join('')}</div>`;
     }
   }
-  return `<h1 class="h1">街づくり</h1><p class="lead">球場の周りに街をつくり、観客が来やすく、試合がない日も人が集まる「ボールパーク」を目指します。アクセスと賑わいは観客動員に、住民と地域の愛着はファンの数に効きます。</p>
-  <div class="panel" style="margin-bottom:16px">${tiles([['アクセス', st.acc], ['賑わい', st.vib], ['住民', fmtPeople(Math.round(st.pop))], ['地域の愛着', Math.round(tw.attach)], ['地価', '×' + tw.landIdx.toFixed(2)], ['街の収入', fmtOku(townWeeklyRevenue(curTurn() >= 11 && curTurn() <= 38)) + '／週']])}</div>
-  <div class="grid g2"><div class="panel"><div class="panel-b"><div class="town">${grid}</div></div></div>${panel(sel ? '選んだ区画' : '区画の操作', side)}</div>`;
-};
+  return `<div class="grid g2"><div class="panel"><div class="panel-b"><div class="town">${grid}</div></div></div>${panel(sel ? '選んだ区画' : '区画の操作', side)}</div>`;
+}
+function evEffects(d, m) {
+  const out = [];
+  if (d.vib) out.push(`開催中の賑わい+${d.vib}`);
+  out.push(`発展の勢い+${Math.round(d.dev * m)}`);
+  if (d.attach) out.push(`地域の愛着+${r1(d.attach * m)}`);
+  if (d.fans) out.push(`ファン+${r1(d.fans * m)}`);
+  if (d.pop) out.push(`人気+${r1(d.pop * m)}`);
+  if (d.acc) out.push(`アクセス+${d.acc}（ずっと）`);
+  if (d.rev) out.push(`収入 約${fmtOku(d.rev * m)}`);
+  return `<div class="evfx">${out.join('　')}</div>`;
+}
+function townEventsView() {
+  const tw = G.town; const evs = tw.events || [];
+  const running = evs.length ? `<div class="lot">${evs.map(e => { const d = TOWN_EVENTS[e.k]; return `<div class="lot-row"><span style="font-size:22px">${d.i}</span><div style="flex:1;min-width:160px"><b>${d.n}</b> <span class="small muted">残り${e.wk}週</span>${bar(e.tot - e.wk, e.tot)}</div></div>`; }).join('')}</div>`
+    : '<p class="muted" style="margin:0">いま開いているイベントはありません。下の一覧から開催できます（同時に2つまで）。</p>';
+  const dev = tw.dev || 0;
+  const devHtml = `${bar(dev, DEV_MAX, '', DEV_START)}<p class="small muted" style="margin:6px 0 0">勢いが${DEV_START}を超えると、空いている民有地に民間の店や住宅が建ち始めます。勢いはイベントや街の賑わいでたまり、建物が1つ建つたびに使われます。今年のイベント来場者：<b>${fmtPeople(tw.visitY || 0)}</b></p>`;
+  const list = Object.entries(TOWN_EVENTS).map(([k, d]) => {
+    const c = eventCanHost(k); const m = eventMult(k); const on = evs.some(e => e.k === k);
+    const when = [d.months ? d.months.join('・') + '月' : '通年', d.off ? 'オフ限定' : '', `${d.wk}週間`].filter(Boolean).join('・');
+    return `<div class="evrow ${on ? 'on' : ''}"><div class="ei">${d.i}</div><div><b>${d.n}</b> <span class="small muted">${fmtOku(d.cost)}・${when}</span><div class="small muted">${d.d}</div>${evEffects(d, m)}</div>
+      <button class="btn sm pri" data-a="hostEv" data-k="${k}" ${c.ok ? '' : 'disabled'}>開催する</button>${c.ok ? '' : `<div class="why">${esc(c.why)}</div>`}</div>`;
+  }).join('');
+  const log = (tw.evLog || []).slice(0, 8);
+  const logHtml = log.length ? `<ul class="tasks">${log.map(l => `<li><span>${TOWN_EVENTS[l.k].i} ${TOWN_EVENTS[l.k].n}</span><span class="small muted">${l.y}年${l.m}月・約${fmtPeople(l.visit)}</span></li>`).join('')}</ul>` : '<p class="muted" style="margin:0">まだ開催していません。</p>';
+  return `<div class="grid g2 evgrid"><div class="stack">${panel('開催できるイベント', `<div class="lot">${list}</div>`)}</div>
+    <div class="stack">${panel('開催中', running)}${panel('発展の勢い', devHtml)}${panel('これまでのイベント', logHtml, { flush: !!log.length })}</div></div>`;
+}
 function bldEffects(d, m) {
   const L = { acc: 'アクセス', vib: '賑わい', pop: '住民', attach: '地域の愛着', fans: 'ファン', food: '飲食売上', goods: 'グッズ売上', heal: '故障回復', sat: '満足度', popw: '人気' };
   const out = [];
@@ -5717,6 +6067,8 @@ ACT.buyLand = () => { const c = G.town.cells[UI.sel.cell]; if (buyLand(c)) toast
 ACT.bld = el => { const c = G.town.cells[UI.sel.cell]; const r = build(c, el.dataset.k); if (r.ok) toast('建設を始めました', 'good'); else toast(r.why, 'bad'); render(); };
 ACT.bldUp = () => { const c = G.town.cells[UI.sel.cell]; if (upgradeBld(c)) toast('拡張工事を始めました', 'good'); render(); };
 ACT.bldDel = () => { const c = G.town.cells[UI.sel.cell]; if (c && c.b) { demolish(c); toast('取り壊しました'); } render(); };
+ACT.buyPriv = () => { const c = G.town.cells[UI.sel.cell]; if (c && buyOutPrivate(c)) toast('区画を買い取りました', 'good'); else toast('資金が足りません', 'bad'); render(); };
+ACT.hostEv = el => { const k = el.dataset.k; const r = hostEvent(k); if (r.ok) toast(`${TOWN_EVENTS[k].n}を開催します`, 'good'); else toast(r.why, 'bad'); render(); };
 
 /* ---------- 中長期計画・オーナー ---------- */
 SCREENS.plan = () => {

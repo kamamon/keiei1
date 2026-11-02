@@ -147,7 +147,15 @@ function renderHeader() {
   </header>`;
 }
 function renderScreen() { const f = SCREENS[UI.screen] || SCREENS.home; try { return f(); } catch (e) { console.error(e); return `<div class="panel"><div class="panel-b">画面の表示中にエラーが発生しました：${esc(e.message)}</div></div>`; } }
+/* 描画中に change/blur から render が呼ばれても二重に書き換えない */
+let RENDERING = false, RENDER_AGAIN = false;
 function render() {
+  if (RENDERING) { RENDER_AGAIN = true; return; }
+  RENDERING = true;
+  try { renderNow(); } finally { RENDERING = false; }
+  if (RENDER_AGAIN) { RENDER_AGAIN = false; render(); }
+}
+function renderNow() {
   const app = document.getElementById('app');
   applyTheme();
   if (!G || UI.screen === 'title') { app.innerHTML = SCREENS.title(); renderModalRoot(); if (UI.resetScroll) { window.scrollTo(0, 0); UI.resetScroll = false; } return; }

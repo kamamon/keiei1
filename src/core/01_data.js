@@ -246,7 +246,7 @@ const REV_CATS = { ticket: '入場料', food: '飲食', goods: 'グッズ', tv: 
   fanclub: 'ファンクラブ', town: '街・不動産', farm: '2軍・その他', prize: '賞金・分配金', transfer: '移籍金', subsidy: '親会社の支援' };
 const EXP_CATS = { payroll: '選手年俸', staff: 'スタッフ人件費', rent: '球場使用料', ops: '試合運営費', travel: '遠征費', maint: '設備維持費',
   ads: '広告宣伝費', promo: 'イベント費', scout: 'スカウト費', dev: '育成費', sales: '営業費', camp: 'キャンプ費', capex: '設備投資',
-  land: '土地取得', bonus: '契約金', transfer: '移籍金', interest: '支払利息', fc: 'ファンクラブ特典', tax: '法人税等', other: 'その他' };
+  land: '土地取得', bonus: '契約金', transfer: '移籍金', interest: '支払利息', fc: 'ファンクラブ特典', townev: '街のイベント費', tax: '法人税等', other: 'その他' };
 const BUDGET_ITEMS = {
   scout: { n: 'スカウト活動費', d: '調査の速さと範囲が変わる', min: 5000, max: 80000 },
   dev: { n: '育成費', d: '全選手の成長速度が変わる', min: 10000, max: 120000 },
@@ -262,3 +262,35 @@ const GOODS = {
   plush: { n: 'マスコットのぬいぐるみ', cost: 1500, wk: 12, boost: 0.15, fans: 2, d: '子どもと女性に人気。ファンも少し増える' },
   uni: { n: '限定ユニフォーム', cost: 3000, wk: 6, boost: 0.4, pop: 0.5, d: '数量限定。話題になり人気も上がる' }
 };
+
+/* 街のイベント（街の発展を後押しする） */
+const TOWN_EVENTS = {
+  matsuri: { n: '夏祭り', i: '🥁', cost: 3000, wk: 2, months: [7, 8], dev: 40, vib: 10, attach: 4, fans: 3, rev: 800, visit: 50000, d: '地域の人と一緒につくる夏の祭り。地元の愛着が深まる' },
+  hanabi: { n: '花火大会', i: '🎆', cost: 5000, wk: 1, months: [7, 8, 9], dev: 50, vib: 14, attach: 3, pop: 0.8, rev: 1000, visit: 100000, d: '夏の夜空を彩る大花火大会。遠くからも人が集まる' },
+  gourmet: { n: 'グルメフェス', i: '🍜', cost: 4000, wk: 2, months: [3, 4, 5, 6, 9, 10, 11], req: ['yokocho', 'brewery'], dev: 60, vib: 12, fans: 2, rev: 2500, visit: 80000, d: '全国のご当地グルメが集まる。飲食横丁かブルワリーが必要' },
+  marche: { n: 'マルシェ（朝市）', i: '🧺', cost: 800, wk: 4, req: ['park'], dev: 25, vib: 5, attach: 1.5, rev: 600, visit: 20000, cool: 4, d: '芝生広場で毎週末に開く朝市。じわじわ街に根づく。芝生広場が必要' },
+  music: { n: '音楽フェス', i: '🎸', cost: 15000, wk: 1, req: ['arena'], orOff: true, dev: 80, vib: 15, pop: 0.6, fans: 3, rev: 12000, visit: 120000, d: '人気アーティストが集う。アリーナがあればいつでも、なければオフシーズンに球場で開催' },
+  marathon: { n: '市民マラソン', i: '🏃', cost: 6000, wk: 1, months: [11, 12, 1, 2, 3], dev: 45, attach: 4, fans: 2, acc: 1, visit: 30000, d: '球場発着の市民マラソン。沿道の道路が整い、アクセスも少し良くなる' },
+  youth: { n: '少年野球大会', i: '🧢', cost: 1500, wk: 1, dev: 20, attach: 3, fans: 2, visit: 10000, cool: 20, d: '球団主催の少年野球大会。野球アカデミーがあると効果が大きい' },
+  xmas: { n: 'イルミネーション', i: '🎄', cost: 4000, wk: 4, months: [12], dev: 50, vib: 10, attach: 2, rev: 1500, visit: 60000, d: '冬の夜を彩る光の街。年末の人出を呼び込む' },
+  openday: { n: '球場開放デー', i: '🧤', cost: 500, wk: 1, off: true, dev: 15, attach: 2, fans: 1.5, pop: 0.3, visit: 15000, cool: 6, d: 'グラウンドを開放してキャッチボール。オフシーズン限定' },
+  sale: { n: '商店街合同セール', i: '🛍️', cost: 1000, wk: 2, dev: 30, vib: 4, attach: 2.5, visit: 25000, cool: 16, d: '地元の商店街と一緒にセールを開き、街全体で盛り上げる' },
+  bigfes: { n: 'ボールパーク・フェスティバル', i: '🎡', cost: 30000, wk: 2, needVib: 40, req: ['mall', 'arena', 'hotel'], dev: 160, vib: 20, pop: 1.2, fans: 5, rev: 12000, visit: 300000, d: '街全体を会場にした一大祭典。賑わい40以上と、モール・アリーナ・ホテルのいずれかが必要' }
+};
+/* 民間の開発で建つ建物（球団の土地ではない） */
+const PRIV_BLD = {
+  house: { n: '住宅街', i: '🏡', vib: 1, pop: 1800, attach: 1 },
+  shop: { n: '商店', i: '🏪', vib: 2, pop: 300 },
+  cafe: { n: 'カフェ', i: '☕', vib: 3 },
+  izakaya: { n: '居酒屋', i: '🍢', vib: 3, food: 0.01 },
+  office: { n: '民間オフィス', i: '🏦', vib: 2, pop: 800 },
+  bizhotel: { n: 'ビジネスホテル', i: '🛎️', vib: 2, fans: 0.3 }
+};
+const TOWN_STAGES = [[0, '静かな球場前'], [25, 'にぎわい始めた街'], [50, '活気ある球場の街'], [80, 'ボールパークタウン'], [120, '全国に知られる観光地']];
+
+/* カスタムスタートの選択肢 */
+const CUSTOM_STR = { w2: { n: '最弱', off: -5 }, w1: { n: '弱い', off: -2.5 }, n: { n: '普通', off: 0 }, s1: { n: '強い', off: 2.5 }, s2: { n: '最強', off: 5 } };
+const CUSTOM_AI = { w: { n: '弱い', off: -2 }, n: { n: '普通', off: 0 }, s: { n: '強い', off: 2 } };
+const CUSTOM_OWNER = { easy: { n: 'やさしい', d: '評価の減点が小さい', k: 0.6 }, normal: { n: 'ふつう', d: '標準', k: 1 }, hard: { n: 'きびしい', d: '減点が大きく、解任されやすい', k: 1.4 }, none: { n: '解任なし', d: '信頼がなくなっても解任されない', k: 1 } };
+const CUSTOM_TOWN = { empty: { n: '更地', d: '球場と駅だけ。ゼロから街をつくる' }, normal: { n: 'ふつう', d: '駐車場がひとつ' }, dev: { n: '発展済み', d: '飲食横丁や公園、民間の店が並ぶ' } };
+const CUSTOM_LAND = { few: { n: '少ない', d: '球場の両隣だけ' }, normal: { n: 'ふつう', d: '球場の上下左右' }, many: { n: '多い', d: '球場の周り8区画＋α' } };

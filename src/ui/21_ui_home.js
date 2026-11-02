@@ -38,6 +38,7 @@ SCREENS.title = () => {
   if (s.step === 1) return titleTeams();
   if (s.step === 2) return titleSetup();
   if (s.step === 3) return titleLoad();
+  if (s.step === 4) return titleCustom();
   return `<div class="title"><div class="title-board">
     <h1>球団社長</h1>
     <p>プロ野球経営シミュレーション</p>
@@ -68,7 +69,7 @@ function titleTeams() {
     </button>`;
   }).join('');
   return `<div class="main" style="max-width:1200px;margin:0 auto"><h1 class="h1">球団を選ぶ</h1><p class="lead">難易度が低いほど資金と人気があり、戦力も整っています。地方の小さな球団を強くするのも醍醐味です。</p>
-    <div class="teamgrid">${cards}</div>
+    <div class="teamgrid">${cards}<button class="tcard custom" data-a="tCustom"><div class="nm">カスタムスタート</div><div class="small muted">球団名・色・球場・資金・戦力・街の状態・オーナーの厳しさまで、自分で決めて始めます。${s.team != null ? `<br>選んでいる「${esc(TEAM_DEFS[s.team].city + TEAM_DEFS[s.team].nick)}」をひな形にします。` : ''}</div></button></div>
     <div class="row" style="margin-top:18px"><button class="btn" data-a="tBack">戻る</button><button class="btn pri" data-a="tNext" ${s.team == null ? 'disabled' : ''}>この球団で始める</button></div></div>`;
 }
 function titleSetup() {
@@ -84,7 +85,7 @@ function titleSetup() {
 }
 ACT.tNew = () => { UI.title.step = 1; UI.resetScroll = true; render(); };
 ACT.tLoadMenu = () => { UI.title.step = 3; render(); };
-ACT.tBack = () => { UI.title.step = Math.max(0, UI.title.step === 3 ? 0 : UI.title.step - 1); render(); };
+ACT.tBack = () => { const st = UI.title.step; UI.title.step = st === 3 ? 0 : st === 4 ? 1 : Math.max(0, st - 1); UI.resetScroll = true; render(); };
 ACT.tPick = el => { UI.title.team = +el.dataset.v; render(); };
 ACT.tNext = () => { if (UI.title.team == null) return; UI.title.step = 2; UI.resetScroll = true; render(); };
 ACT.tName = el => { UI.title.name = el.value; };
@@ -93,6 +94,102 @@ ACT.tPol = el => { UI.title.policy = el.value; };
 ACT.tStart = () => {
   const s = UI.title;
   newGame({ team: s.team, name: s.name.trim() || '球団社長', nick: s.nick.trim() || null, policy: s.policy });
+  try { G.user.theme = localStorage.getItem('kyudan_theme') || 'night'; } catch (e) { }
+  UI.screen = 'home'; UI.resetScroll = true; UI.title = { step: 0, team: null, name: '', nick: '', policy: 'balance' };
+  render(); openModal('welcome'); autosave();
+};
+/* ---------- カスタムスタート ---------- */
+const CS_NICKS = [['グリフォンズ', '鷲'], ['ペガサス', '翼'], ['コメッツ', '彗'], ['オーシャンズ', '海'], ['ボルケーノズ', '炎'], ['ミーティアーズ', '星'],
+  ['アルバトロス', '翔'], ['ブリザーズ', '雪'], ['サンライズ', '旭'], ['クラウンズ', '冠'], ['フォレスターズ', '森'], ['トルネーズ', '嵐']];
+const CS_COLORS = [['#0F5BA7', '#F2C230'], ['#1E7B4A', '#F4EBD0'], ['#B3122E', '#1B1B1B'], ['#F07F1A', '#20304F'], ['#5B2C83', '#E8C35A'],
+  ['#14A3C7', '#FFFFFF'], ['#2B2B2B', '#D4A017'], ['#C2185B', '#FCE4EC'], ['#00897B', '#FFD54F'], ['#8D1C1C', '#E9D8A6']];
+const CS_CASH = [50000, 100000, 200000, 350000, 500000, 1000000];
+function csFrom(i) {
+  const d = TEAM_DEFS[i];
+  return { base: i, city: d.city, nick: d.nick, kanji: d.kanji, color: d.color, color2: d.color2, parent: d.parent, region: d.region,
+    stadium: d.stadium, cap: d.cap, dome: d.dome, owned: false, fac: d.fac, cash: d.cash, market: d.market, pop: d.pop,
+    str: 'n', ai: 'n', town: 'normal', land: 'normal', owner: 'normal', year: START_YEAR };
+}
+function csNorm(c) {
+  const t = v => String(v || '').trim();
+  const nick = t(c.nick), kanji = t(c.kanji) || nick.slice(0, 1) || '球';
+  return Object.assign({}, c, { city: t(c.city), nick, kanji: Array.from(kanji)[0], parent: t(c.parent) || t(c.city) + 'ホールディングス', stadium: t(c.stadium) || t(c.city) + 'スタジアム',
+    cap: clamp(Math.round(+c.cap || 30000), 15000, 55000), pop: clamp(Math.round(+c.pop || 50), 20, 90), market: clamp(+c.market || 3, 1, 5), fac: clamp(+c.fac || 2, 1, 5), cash: Math.max(0, +c.cash || 0),
+    region: clamp(+c.region || 0, 0, REGIONS.length - 1), year: clamp(Math.round(+c.year || START_YEAR), 1950, 2200) });
+}
+function csRandomize(c) {
+  const rp = a => a[Math.floor(Math.random() * a.length)];
+  c.region = Math.floor(Math.random() * REGIONS.length);
+  c.city = rp(PLACES[c.region]);
+  const [nk, kj] = rp(CS_NICKS); c.nick = nk; c.kanji = kj;
+  const [c1, c2] = rp(CS_COLORS); c.color = c1; c.color2 = c2;
+  c.parent = c.city + rp(['電鉄', 'フーズ', 'ガス', '信用金庫', '通信', '観光', 'ホールディングス', '製菓']);
+  c.stadium = c.dome ? c.city + 'ドーム' : c.city + rp(['スタジアム', 'ボールパーク', '市民球場', 'フィールド']);
+}
+function csPlate(c) {
+  const n = csNorm(c); const T = { color: n.color, color2: n.color2, kanji: n.kanji };
+  const b = TEAM_DEFS[n.base]; const st = customStars(n);
+  return `<div class="cs-plate" style="--c:${n.color};--c2:${n.color2}">${emblem(T, 84)}<div class="nm">${esc(n.city || '（都市名）')}${esc(n.nick || '（愛称）')}</div>
+    <div class="sub">${LEAGUES[b.league]}　${esc(n.stadium)}</div></div>
+    <div class="panel"><div class="panel-b"><dl class="kv">
+      <dt>難易度の目安</dt><dd>${stars(st)}</dd>
+      <dt>本拠地</dt><dd>${comma(n.cap)}人・${n.dome ? 'ドーム' : '屋外'}・${n.owned ? '自前' : '借りる'}</dd>
+      <dt>資金</dt><dd>${fmtOku(n.cash)}</dd>
+      <dt>戦力</dt><dd>${CUSTOM_STR[n.str].n}／他球団 ${CUSTOM_AI[n.ai].n}</dd>
+      <dt>街</dt><dd>${CUSTOM_TOWN[n.town].n}・土地${CUSTOM_LAND[n.land].n}</dd>
+      <dt>オーナー</dt><dd>${CUSTOM_OWNER[n.owner].n}</dd>
+      <dt>開始</dt><dd>${n.year}年</dd>
+    </dl><p class="small" style="margin:10px 0 0">オーナーの期待：「${ownerHope({ star: st })}」</p></div></div>`;
+}
+function csRefresh() { const el = document.getElementById('csSide'); if (el) el.innerHTML = csPlate(UI.title.c); }
+function titleCustom() {
+  const s = UI.title; const c = s.c || (s.c = csFrom(s.team != null ? s.team : 7));
+  const f = (label, html, note) => `<div class="cf"><div class="cf-l">${label}</div><div class="cf-v">${html}${note ? `<div class="note">${note}</div>` : ''}</div></div>`;
+  const txt = (k, max, w) => `<input class="inp" ${w ? `style="flex:0 0 ${w}"` : ''} maxlength="${max}" value="${esc(c[k])}" data-i="csTxt" data-k="${k}" aria-label="${k}">`;
+  const sg = (k, opts) => seg('csSet', opts, typeof c[k] === 'boolean' ? (c[k] ? 1 : 0) : c[k], `data-k="${k}"`);
+  const rng = (k, min, max, step, fmt) => `<input type="range" min="${min}" max="${max}" step="${step}" value="${c[k]}" data-i="csNum" data-k="${k}" aria-label="${k}"><output data-out="${k}">${fmt(c[k])}</output>`;
+  const pol = Object.entries(POLICIES).map(([k, p]) => `<label class="lot-row" style="cursor:pointer"><input type="radio" name="pol" value="${k}" ${s.policy === k ? 'checked' : ''} data-c="tPol"><div><b>${p.n}</b><div class="small muted">${p.d}</div></div></label>`).join('');
+  const objOpts = o => Object.entries(o).map(([k, v]) => [k, v.n]);
+  return `<div class="main" style="max-width:1120px;margin:0 auto"><h1 class="h1">カスタムスタート</h1>
+    <p class="lead">選んだ球団の枠（リーグと日程）を使って、自分だけの球団を立ち上げます。決めた内容はプレートにすぐ反映されます。</p>
+    <div class="cs"><div class="stack">
+    ${panel('球団', f('ひな形', `<select class="inp" data-c="csBase">${TEAM_DEFS.map((d, i) => opt(i, `${d.city}${d.nick}（${LEAGUES[d.league]}）`, c.base)).join('')}</select>`, 'この球団の枠を置き換えます。選び直すと名前や球場などの設定を読み込み直します。') +
+      f('都市名', txt('city', 8)) + f('愛称', txt('nick', 12)) + f('マークの文字', txt('kanji', 2, '4.5em'), '漢字1文字がおすすめです') +
+      f('チームカラー', `<input type="color" value="${esc(c.color)}" data-i="csTxt" data-k="color" aria-label="メインカラー"><span class="small muted">メイン</span><input type="color" value="${esc(c.color2)}" data-i="csTxt" data-k="color2" aria-label="サブカラー"><span class="small muted">サブ</span>`) +
+      f('親会社', txt('parent', 20)) +
+      f('本拠地の地域', `<select class="inp" data-c="csSel" data-k="region">${REGIONS.map((r, i) => opt(i, r, c.region)).join('')}</select>`, '地元出身の有望株やスカウトの担当地域に関わります'),
+      { act: '<button class="btn sm" data-a="csRandom">名前と色をおまかせ</button>' })}
+    ${panel('球場', f('球場名', txt('stadium', 20)) + f('収容人数', rng('cap', 15000, 55000, 1000, v => comma(v) + '人')) +
+      f('屋根', sg('dome', [[0, '屋外'], [1, 'ドーム']]), 'ドームは雨天中止がなく、使用料が高めです') +
+      f('持ち主', sg('owned', [[0, '借りる'], [1, '自前で保有']]), '自前なら使用料がかからず、維持費がかかります') +
+      f('設備の水準', sg('fac', [[1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5']]), '球場とトレーニング施設の最初のレベル'))}
+    ${panel('お金と人気', f('資金', sg('cash', CS_CASH.map(v => [v, fmtOku(v).replace('円', '')]))) +
+      f('市場規模', sg('market', [[1, '1 小'], [2, '2'], [3, '3'], [4, '4'], [5, '5 大']]), '都市の大きさ。観客・スポンサー・放映権の土台になります') +
+      f('人気', rng('pop', 20, 90, 1, v => v)))}
+    ${panel('戦力', f('自分の球団', sg('str', objOpts(CUSTOM_STR))) + f('ほかの11球団', sg('ai', objOpts(CUSTOM_AI))))}
+    ${panel('街', f('球場の周り', sg('town', objOpts(CUSTOM_TOWN)), CUSTOM_TOWN[c.town].d) + f('最初の土地', sg('land', objOpts(CUSTOM_LAND)), CUSTOM_LAND[c.land].d))}
+    ${panel('ルール', f('オーナー', sg('owner', objOpts(CUSTOM_OWNER)), CUSTOM_OWNER[c.owner].d) +
+      f('開始年', `<input class="inp num" type="number" min="1950" max="2200" style="flex:0 0 7em" value="${c.year}" data-c="csYear" aria-label="開始年"><span class="small muted">年</span>`))}
+    ${panel('あなた', f('名前', `<input class="inp" maxlength="16" placeholder="球団社長" value="${esc(s.name)}" data-i="tName" aria-label="あなたの名前">`) + `<div class="lot" style="margin-top:10px">${pol}</div>`)}
+    <div class="row"><button class="btn" data-a="tBack">戻る</button><button class="btn pri" data-a="csStart">この球団で始める</button></div>
+    </div><aside class="cs-side" id="csSide">${csPlate(c)}</aside></div></div>`;
+}
+ACT.tCustom = () => { const s = UI.title; if (!s.c || (s.team != null && s.c.base !== s.team)) s.c = csFrom(s.team != null ? s.team : 7); s.step = 4; UI.resetScroll = true; render(); };
+ACT.csBase = el => { const o = UI.title.c; UI.title.c = Object.assign(csFrom(+el.value), { str: o.str, ai: o.ai, town: o.town, land: o.land, owner: o.owner, year: o.year }); UI.title.team = +el.value; render(); };
+ACT.csTxt = el => { UI.title.c[el.dataset.k] = el.value; csRefresh(); };
+ACT.csNum = el => { const k = el.dataset.k; UI.title.c[k] = +el.value; const o = document.querySelector(`output[data-out="${k}"]`); if (o) o.textContent = k === 'cap' ? comma(+el.value) + '人' : el.value; csRefresh(); };
+ACT.csSel = el => { UI.title.c[el.dataset.k] = +el.value; render(); };
+ACT.csSet = el => {
+  const k = el.dataset.k; let v = el.dataset.v;
+  if (k === 'dome' || k === 'owned') v = v === '1'; else if (k === 'fac' || k === 'cash' || k === 'market') v = +v;
+  UI.title.c[k] = v; render();
+};
+ACT.csYear = el => { UI.title.c.year = clamp(Math.round(+el.value || START_YEAR), 1950, 2200); render(); };
+ACT.csRandom = () => { csRandomize(UI.title.c); render(); };
+ACT.csStart = () => {
+  const s = UI.title; const c = csNorm(s.c);
+  if (!c.city || !c.nick) { toast('都市名と愛称を入れてください', 'bad'); return; }
+  newGame({ team: c.base, name: s.name.trim() || '球団社長', policy: s.policy, custom: c });
   try { G.user.theme = localStorage.getItem('kyudan_theme') || 'night'; } catch (e) { }
   UI.screen = 'home'; UI.resetScroll = true; UI.title = { step: 0, team: null, name: '', nick: '', policy: 'balance' };
   render(); openModal('welcome'); autosave();
@@ -238,7 +335,7 @@ MODALS.review = () => {
     <p class="small muted">新しい年が始まりました。予算・中期計画・キャンプを確認しましょう。</p>`,
     foot: '<button class="btn" data-a="go" data-v="plan">中長期計画へ</button><button class="btn pri" data-a="closeModal">閉じる</button>' };
 };
-MODALS.gameover = () => ({ title: '球団社長を解任されました', size: 'narrow', body: `<p>${esc(G.gameOver.why)}。</p><p class="muted">在任：${START_YEAR}年〜${G.gameOver.y}年</p>`,
+MODALS.gameover = () => ({ title: '球団社長を解任されました', size: 'narrow', body: `<p>${esc(G.gameOver.why)}。</p><p class="muted">在任：${G.startYear || START_YEAR}年〜${G.gameOver.y}年</p>`,
   foot: '<button class="btn" data-a="go" data-v="records">球団史を見る</button><button class="btn pri" data-a="toTitle">タイトルへ</button>' });
 ACT.toTitle = () => { closeAllModals(); UI.screen = 'title'; UI.title.step = 0; G = null; render(); };
 
@@ -246,7 +343,7 @@ ACT.toTitle = () => { closeAllModals(); UI.screen = 'title'; UI.title.step = 0; 
 SCREENS.home = () => {
   const T = uT(); const ut = T.id; const t = curTurn(); const R = T.rec;
   const tasks = userTasks();
-  const taskHtml = tasks.length ? `<ul class="tasks">${tasks.map(x => `<li><span>${x.urgent ? '<span class="dot o"></span> ' : '<span class="dot s"></span> '}${esc(x.t)}</span><button class="btn sm" data-a="${x.go === 'event' ? 'openEvent' : 'go'}" data-v="${x.go}">開く</button></li>`).join('')}</ul>` : '<div class="empty">いま急ぎの用事はありません。「次の週へ」で進めましょう。</div>';
+  const taskHtml = tasks.length ? `<ul class="tasks">${tasks.map(x => `<li><span>${x.urgent ? '<span class="dot o"></span> ' : '<span class="dot s"></span> '}${esc(x.t)}</span><button class="btn sm" data-a="${x.go === 'event' ? 'openEvent' : 'go'}" data-v="${x.go}" ${x.tab ? `data-tab="${x.tab}"` : ''}>開く</button></li>`).join('')}</ul>` : '<div class="empty">いま急ぎの用事はありません。「次の週へ」で進めましょう。</div>';
   const recent = G.boxOrder.slice(-6).reverse().map(id => G.boxes[id]).filter(Boolean);
   const recentHtml = recent.length ? recent.map(miniGame).join('') : `<div class="empty">${t < SEASON_START ? `開幕は3月第4週です（あと${SEASON_START - t}週）` : 'まだ試合がありません'}</div>`;
   const st = standings(T.league);

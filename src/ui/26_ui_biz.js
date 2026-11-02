@@ -193,20 +193,38 @@ ACT.promoDel = el => { const i = G.promo.queue.lastIndexOf(el.dataset.k); if (i 
 /* ---------- 街づくり ---------- */
 SCREENS.town = () => {
   const tw = G.town; const st = tw.stat;
+  const tab = getTab('town', 'map');
+  const nEv = (tw.events || []).length;
+  const stg = townStage();
+  const head = `<h1 class="h1">街づくり</h1><p class="lead">球場の周りに街をつくり、観客が来やすく、試合がない日も人が集まる「ボールパーク」を目指します。イベントで人を呼ぶと、空いている土地に民間の店や住宅が建ち、街が自然に育っていきます。</p>
+  <div class="panel" style="margin-bottom:16px">${tiles([['街の段階', stg.n, '段階 ' + stg.i + '／' + TOWN_STAGES.length, 'txt'], ['アクセス', st.acc], ['賑わい', st.vib, st.evVib ? `うちイベント +${st.evVib}` : ''], ['住民', fmtPeople(Math.round(st.pop))], ['地域の愛着', Math.round(tw.attach)], ['発展の勢い', Math.round(tw.dev || 0), (tw.dev || 0) >= DEV_START ? '民間の開発が進行中' : DEV_START + 'で民間の開発が始まる'], ['地価', '×' + tw.landIdx.toFixed(2)], ['街の収入', fmtOku(townWeeklyRevenue(curTurn() >= 11 && curTurn() <= 38)) + '／週']])}</div>
+  ${tabs('town', [['map', '区画と建物'], ['ev', '街のイベント', nEv || null]], tab)}`;
+  return head + (tab === 'ev' ? townEventsView() : townMapView());
+};
+function townMapView() {
+  const tw = G.town;
   const sel = UI.sel.cell != null ? tw.cells[UI.sel.cell] : null;
   const grid = tw.cells.map((c, i) => {
     let ic = '', lb = '', cls = c.own ? 'own' : '';
     if (c.sp === 'stadium') { ic = '🏟️'; lb = '本拠地'; cls += ' stadium'; }
     else if (c.sp === 'station') { ic = '🚉'; lb = '最寄り駅'; cls += ' station'; }
+    else if (c.pv) { ic = PRIV_BLD[c.pv.k].i; lb = PRIV_BLD[c.pv.k].n; cls += ' priv'; }
     else if (c.b) { ic = BLD[c.b.k].i; lb = c.b.wk ? `工事中 ${c.b.wk}週` : BLD[c.b.k].n; if (c.b.wk) cls += ' wip'; }
     else { ic = c.own ? '<span style="color:var(--lamp)">＋</span>' : ''; lb = c.own ? '空き地' : '売地 ' + fmtOku(landPrice(c)).replace('円', ''); }
     return `<button class="cell ${cls} ${UI.sel.cell === i ? 'sel' : ''}" data-a="cell" data-i="${i}" aria-label="${esc(lb)}">${c.b && c.b.lv > 1 ? `<span class="lvb">Lv${c.b.lv}</span>` : ''}<span class="ic">${ic}</span><span class="lb">${esc(lb)}</span></button>`;
   }).join('');
-  let side = '<p class="muted">区画を選ぶと、土地の購入や建物の建設ができます。球場の周り（隣接8マス）は飲食や商業の効果が2割増しです。</p>';
+  let side = '<p class="muted">区画を選ぶと、土地の購入や建物の建設ができます。球場の周り（隣接8マス）は飲食や商業の効果が2割増しです。</p><p class="small muted">「民」の印は、街の発展で民間が建てた建物です。賑わいや住民を増やしてくれます。</p>';
   if (sel) {
     if (sel.sp === 'stadium') side = `<p><b>${esc(stadiumName())}</b></p><button class="btn" data-a="go" data-v="stadium">球場・設備へ</button>`;
     else if (sel.sp === 'station') side = '<p>既存の最寄り駅です。駅からのアクセスは「シャトルバス乗り場」や「新駅」で改善できます。</p>';
-    else if (!sel.own) side = `<p>民有地です。購入すると建物を建てられます。</p><dl class="kv"><dt>土地の価格</dt><dd>${fmtOku(landPrice(sel))}</dd></dl><button class="btn pri" style="margin-top:10px" data-a="buyLand" ${G.fin.cash >= landPrice(sel) ? '' : 'disabled'}>購入する</button><p class="small muted">街が賑わうほど地価は上がります。</p>`;
+    else if (sel.pv) {
+      const d = PRIV_BLD[sel.pv.k]; const bp = buyoutPrice(sel);
+      const fx = [d.vib ? `賑わい+${d.vib}` : '', d.pop ? `住民+${comma(d.pop)}` : '', d.attach ? '地域の愛着がじわじわ上がる' : '', d.food ? '飲食売上+' + Math.round(d.food * 100) + '%' : '', d.fans ? 'ファンが少し増える' : ''].filter(Boolean).join('　');
+      side = `<p><b>${d.i} ${d.n}</b>（民間・${sel.pv.y}年〜）</p><p class="small muted">街の発展で民間が建てた建物です。球団にお金はかかりません。</p><div class="evfx">${fx}</div>
+        <dl class="kv" style="margin-top:10px"><dt>買い取り価格</dt><dd>${fmtOku(bp)}</dd></dl>
+        <button class="btn" style="margin-top:10px" data-a="buyPriv" ${G.fin.cash >= bp ? '' : 'disabled'}>買い取って球団の土地にする</button><p class="small muted">買い取ると建物はなくなり、上の効果も消えます。大きな施設を建てたいときに。</p>`;
+    }
+    else if (!sel.own) side = `<p>民有地です。購入すると建物を建てられます。</p><dl class="kv"><dt>土地の価格</dt><dd>${fmtOku(landPrice(sel))}</dd></dl><button class="btn pri" style="margin-top:10px" data-a="buyLand" ${G.fin.cash >= landPrice(sel) ? '' : 'disabled'}>購入する</button><p class="small muted">街が賑わうほど地価は上がります。放っておくと民間の建物が建つこともあります。</p>`;
     else if (sel.b) {
       const d = BLD[sel.b.k]; const up = sel.b.lv < 3 && !sel.b.wk;
       side = `<p><b>${d.i} ${d.n}</b> Lv${sel.b.lv}${sel.b.wk ? `（工事中・残り${sel.b.wk}週）` : ''}</p><p class="small muted">${d.d}</p>${bldEffects(d, bldMul(sel.b))}
@@ -215,10 +233,36 @@ SCREENS.town = () => {
       side = `<p class="small muted">球団の空き地です。建てる施設を選んでください。${nearStadium(sel) ? '<b>球場隣接のため飲食・商業の効果が2割増し。</b>' : ''}</p><div class="lot">${Object.entries(BLD).map(([k, d]) => { const c = canBuild(sel, k); return `<div class="lot-row"><span style="font-size:22px">${d.i}</span><div style="flex:1"><b>${d.n}</b> <span class="small muted">${fmtOku(d.cost)}・${d.wk}週・維持${fmtOku(d.maint)}/週</span><div class="small muted">${d.d}</div>${bldEffects(d, 1)}</div><button class="btn sm pri" data-a="bld" data-k="${k}" ${c.ok ? '' : `disabled title="${esc(c.why)}"`}>建てる</button></div>`; }).join('')}</div>`;
     }
   }
-  return `<h1 class="h1">街づくり</h1><p class="lead">球場の周りに街をつくり、観客が来やすく、試合がない日も人が集まる「ボールパーク」を目指します。アクセスと賑わいは観客動員に、住民と地域の愛着はファンの数に効きます。</p>
-  <div class="panel" style="margin-bottom:16px">${tiles([['アクセス', st.acc], ['賑わい', st.vib], ['住民', fmtPeople(Math.round(st.pop))], ['地域の愛着', Math.round(tw.attach)], ['地価', '×' + tw.landIdx.toFixed(2)], ['街の収入', fmtOku(townWeeklyRevenue(curTurn() >= 11 && curTurn() <= 38)) + '／週']])}</div>
-  <div class="grid g2"><div class="panel"><div class="panel-b"><div class="town">${grid}</div></div></div>${panel(sel ? '選んだ区画' : '区画の操作', side)}</div>`;
-};
+  return `<div class="grid g2"><div class="panel"><div class="panel-b"><div class="town">${grid}</div></div></div>${panel(sel ? '選んだ区画' : '区画の操作', side)}</div>`;
+}
+function evEffects(d, m) {
+  const out = [];
+  if (d.vib) out.push(`開催中の賑わい+${d.vib}`);
+  out.push(`発展の勢い+${Math.round(d.dev * m)}`);
+  if (d.attach) out.push(`地域の愛着+${r1(d.attach * m)}`);
+  if (d.fans) out.push(`ファン+${r1(d.fans * m)}`);
+  if (d.pop) out.push(`人気+${r1(d.pop * m)}`);
+  if (d.acc) out.push(`アクセス+${d.acc}（ずっと）`);
+  if (d.rev) out.push(`収入 約${fmtOku(d.rev * m)}`);
+  return `<div class="evfx">${out.join('　')}</div>`;
+}
+function townEventsView() {
+  const tw = G.town; const evs = tw.events || [];
+  const running = evs.length ? `<div class="lot">${evs.map(e => { const d = TOWN_EVENTS[e.k]; return `<div class="lot-row"><span style="font-size:22px">${d.i}</span><div style="flex:1;min-width:160px"><b>${d.n}</b> <span class="small muted">残り${e.wk}週</span>${bar(e.tot - e.wk, e.tot)}</div></div>`; }).join('')}</div>`
+    : '<p class="muted" style="margin:0">いま開いているイベントはありません。下の一覧から開催できます（同時に2つまで）。</p>';
+  const dev = tw.dev || 0;
+  const devHtml = `${bar(dev, DEV_MAX, '', DEV_START)}<p class="small muted" style="margin:6px 0 0">勢いが${DEV_START}を超えると、空いている民有地に民間の店や住宅が建ち始めます。勢いはイベントや街の賑わいでたまり、建物が1つ建つたびに使われます。今年のイベント来場者：<b>${fmtPeople(tw.visitY || 0)}</b></p>`;
+  const list = Object.entries(TOWN_EVENTS).map(([k, d]) => {
+    const c = eventCanHost(k); const m = eventMult(k); const on = evs.some(e => e.k === k);
+    const when = [d.months ? d.months.join('・') + '月' : '通年', d.off ? 'オフ限定' : '', `${d.wk}週間`].filter(Boolean).join('・');
+    return `<div class="evrow ${on ? 'on' : ''}"><div class="ei">${d.i}</div><div><b>${d.n}</b> <span class="small muted">${fmtOku(d.cost)}・${when}</span><div class="small muted">${d.d}</div>${evEffects(d, m)}</div>
+      <button class="btn sm pri" data-a="hostEv" data-k="${k}" ${c.ok ? '' : 'disabled'}>開催する</button>${c.ok ? '' : `<div class="why">${esc(c.why)}</div>`}</div>`;
+  }).join('');
+  const log = (tw.evLog || []).slice(0, 8);
+  const logHtml = log.length ? `<ul class="tasks">${log.map(l => `<li><span>${TOWN_EVENTS[l.k].i} ${TOWN_EVENTS[l.k].n}</span><span class="small muted">${l.y}年${l.m}月・約${fmtPeople(l.visit)}</span></li>`).join('')}</ul>` : '<p class="muted" style="margin:0">まだ開催していません。</p>';
+  return `<div class="grid g2 evgrid"><div class="stack">${panel('開催できるイベント', `<div class="lot">${list}</div>`)}</div>
+    <div class="stack">${panel('開催中', running)}${panel('発展の勢い', devHtml)}${panel('これまでのイベント', logHtml, { flush: !!log.length })}</div></div>`;
+}
 function bldEffects(d, m) {
   const L = { acc: 'アクセス', vib: '賑わい', pop: '住民', attach: '地域の愛着', fans: 'ファン', food: '飲食売上', goods: 'グッズ売上', heal: '故障回復', sat: '満足度', popw: '人気' };
   const out = [];
@@ -234,6 +278,8 @@ ACT.buyLand = () => { const c = G.town.cells[UI.sel.cell]; if (buyLand(c)) toast
 ACT.bld = el => { const c = G.town.cells[UI.sel.cell]; const r = build(c, el.dataset.k); if (r.ok) toast('建設を始めました', 'good'); else toast(r.why, 'bad'); render(); };
 ACT.bldUp = () => { const c = G.town.cells[UI.sel.cell]; if (upgradeBld(c)) toast('拡張工事を始めました', 'good'); render(); };
 ACT.bldDel = () => { const c = G.town.cells[UI.sel.cell]; if (c && c.b) { demolish(c); toast('取り壊しました'); } render(); };
+ACT.buyPriv = () => { const c = G.town.cells[UI.sel.cell]; if (c && buyOutPrivate(c)) toast('区画を買い取りました', 'good'); else toast('資金が足りません', 'bad'); render(); };
+ACT.hostEv = el => { const k = el.dataset.k; const r = hostEvent(k); if (r.ok) toast(`${TOWN_EVENTS[k].n}を開催します`, 'good'); else toast(r.why, 'bad'); render(); };
 
 /* ---------- 中長期計画・オーナー ---------- */
 SCREENS.plan = () => {

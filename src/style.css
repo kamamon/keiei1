@@ -96,6 +96,7 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1px; background: var(--line); border-top: 1px solid var(--line); }
 .tile { background: var(--panel); padding: 10px 14px; }
 .tile .k { font-size: 12px; color: var(--ink2); } .tile .v { font-family: var(--f-num); font-size: 18px; white-space: nowrap; } .tile .s { font-size: 11px; color: var(--ink3); }
+.tile .v.txt { font-family: var(--f-body); font-size: 15px; font-weight: 700; white-space: normal; line-height: 1.35; padding-top: 2px; }
 
 /* ===== ボタン・入力 ===== */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 13px; border: 1px solid var(--line2); background: transparent; color: var(--ink);
@@ -215,6 +216,28 @@ table.t.compact td { padding: 4px 6px; } table.t.compact th { padding: 5px 6px; 
 .tcard.on { outline: 2px solid var(--lamp); }
 .tcard .nm { font-family: var(--f-disp); font-size: 17px; line-height: 1.2; }
 .stars { color: var(--lamp); letter-spacing: 1px; }
+.tcard.custom { border: 1px dashed var(--lamp); border-top: 4px dashed var(--lamp); align-content: center; background: transparent; }
+.tcard.custom:hover { background: var(--panel); }
+.tcard.custom .nm { color: var(--lamp); }
+
+/* ===== カスタムスタート ===== */
+.cs { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; --team: var(--lamp); --team-ink: var(--lamp-ink); }
+.cs-side { position: sticky; top: 16px; display: grid; gap: 12px; }
+.cs-plate { position: relative; overflow: hidden; background: linear-gradient(var(--board), var(--board2)); color: var(--board-ink); border-radius: 8px; border-top: 8px solid var(--c); padding: 20px 16px 22px; text-align: center; box-shadow: var(--shadow); }
+.cs-plate::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: var(--c2); }
+.cs-plate .nm { font-family: var(--f-disp); font-size: 22px; line-height: 1.25; margin-top: 10px; overflow-wrap: anywhere; }
+.cs-plate .sub { font-size: 12px; opacity: .75; margin-top: 4px; }
+.cs-side .stars { font-family: var(--f-body); font-size: 17px; letter-spacing: 2px; }
+.cf { display: grid; grid-template-columns: 8.5em minmax(0, 1fr); gap: 4px 12px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.cf:first-child { padding-top: 0; } .cf:last-child { border-bottom: 0; padding-bottom: 0; }
+.cf-l { color: var(--ink2); font-size: 13px; }
+.cf-v { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; min-width: 0; }
+.cf-v > .inp { flex: 1 1 180px; }
+.cf-v .note { flex-basis: 100%; font-size: 12px; color: var(--ink3); }
+.cf input[type=color] { width: 46px; height: 32px; padding: 2px; border: 1px solid var(--line2); border-radius: var(--r); background: var(--panel2); cursor: pointer; }
+.cf input[type=range] { flex: 1 1 160px; accent-color: var(--lamp); min-width: 0; }
+.cf output { font-family: var(--f-num); min-width: 5.5em; text-align: right; }
+@media (max-width: 860px) { .cs { grid-template-columns: minmax(0, 1fr); } .cs-side { position: static; order: -1; } .cf { grid-template-columns: minmax(0, 1fr); } }
 
 /* ===== 街づくり ===== */
 .town { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
@@ -228,6 +251,16 @@ table.t.compact td { padding: 4px 6px; } table.t.compact th { padding: 5px 6px; 
 .cell.stadium { background: var(--team-soft); border: 2px solid var(--team); }
 .cell.station { background: rgba(255, 181, 71, .08); border-style: solid; }
 .cell.wip .ic { opacity: .45; }
+.cell.priv { border-style: solid; border-color: transparent; background: rgba(140, 160, 200, .10); }
+.cell.priv .lb { color: var(--ink3); }
+.cell.priv::after { content: "民"; position: absolute; top: 3px; left: 5px; font-size: 9.5px; color: var(--ink3); }
+.evrow { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel2); }
+.evrow .ei { font-size: 24px; line-height: 1; text-align: center; }
+.evrow .why { font-size: 11.5px; color: var(--ink3); grid-column: 2 / 4; }
+.evrow.on { border-color: var(--lamp); }
+.evfx { font-size: 12px; color: var(--ball); }
+@media (max-width: 860px) { .evgrid > :last-child { order: -1; } }
+@media (max-width: 480px) { .evrow { grid-template-columns: 28px minmax(0, 1fr); } .evrow > .btn { grid-column: 2; justify-self: start; } .evrow .why { grid-column: 2; } }
 
 /* ===== チャート ===== */
 .chart { width: 100%; height: auto; display: block; }

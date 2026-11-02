@@ -100,30 +100,53 @@ function defaultBudget(T) {
   return { scout: 15000 + T.market * 2000, dev: 20000 + T.market * 3000, sales: 15000 + T.market * 2000, ads: 60000 + T.market * 10000, capex: 100000 + T.market * 20000 };
 }
 
+/* カスタムスタートの設定から難易度（★1〜5）を見積もる */
+function customStars(c) {
+  const sc = (c.market - 3) * 0.6 + CUSTOM_STR[c.str].off / 2.5 * 0.6 + (c.pop - 55) / 20 * 0.5 + (c.cash - 250000) / 250000 * 0.4 - CUSTOM_AI[c.ai].off / 2 * 0.4 + (c.owned ? 0.3 : 0) + (c.fac - 2) * 0.15;
+  return clamp(Math.round(3 - sc), 1, 5);
+}
+function applyCustomDef(d, C) {
+  const baseCap = d.cap, baseDome = d.dome;
+  d.city = (C.city || d.city).slice(0, 8); d.nick = (C.nick || d.nick).slice(0, 12); d.kanji = (C.kanji || d.kanji).slice(0, 1);
+  d.color = C.color || d.color; d.color2 = C.color2 || d.color2; d.parent = (C.parent || d.parent).slice(0, 20);
+  d.stadium = (C.stadium || d.stadium).slice(0, 20); d.cap = clamp(+C.cap || d.cap, 10000, 60000); d.dome = !!C.dome;
+  d.market = clamp(+C.market || d.market, 1, 5); d.pop = clamp(+C.pop || d.pop, 5, 95);
+  d.cash = Math.max(0, +C.cash || 0); d.fac = clamp(+C.fac, 0, 5); d.owned = !!C.owned;
+  d.rent = Math.round(d.rent * (d.cap / baseCap) * (d.dome ? 1.4 : 1) / (baseDome ? 1.4 : 1));
+  if (d.dome && !baseDome) d.hrF = 1.04;
+  d.shift = CUSTOM_STR[C.str].off / 0.4;
+  d.region = C.region != null ? +C.region : d.region;
+  d.star = customStars(C);
+}
 function newGame(o) {
   setSeed(o.seed || ((Date.now() ^ (Math.random() * 1e9)) >>> 0));
   NAMESET = new Set();
+  const C = o.custom || null;
+  const y0 = C && C.year ? clamp(Math.round(+C.year), 1950, 2200) : START_YEAR;
   G = {
-    v: 1, year: START_YEAR, month: 1, week: 1, nid: 1, sid: 1, gid: 1, dayNo: 0, stamp: 0,
+    v: 1, year: y0, startYear: y0, month: 1, week: 1, nid: 1, sid: 1, gid: 1, dayNo: 0, stamp: 0,
     teams: [], players: {}, staff: {}, staffPool: [], prospects: [], foreign: [], fapool: [], faMarket: [], compPending: [],
     news: [], pending: [], evCool: {}, boxes: {}, boxOrder: [], hist: { seasons: [], user: [] }, legends: [], retiredCoaches: [], mlb: [], trades: [],
     flags: {}, post: null, draft: null, sched: null, day: 0, weekly: null, gameOver: null
   };
-  TEAM_DEFS.forEach((d, i) => G.teams.push(makeTeam(d, i)));
+  const defs = TEAM_DEFS.map(d => Object.assign({}, d));
+  if (C) applyCustomDef(defs[o.team], C);
+  defs.forEach((d, i) => G.teams.push(makeTeam(d, i)));
   const T = G.teams[o.team];
   if (o.nick) T.nick = o.nick;
   G.user = {
     tid: T.id, name: o.name || '球団社長', policy: o.policy || 'balance', lineupMode: 'auto', manual: { lu: [], rot: [], su: [], cl: null },
-    train: 'normal', autoSwap: true, autoRoster: false, showWeekly: true, theme: 'night', tutorial: true
+    train: 'normal', autoSwap: true, autoRoster: false, showWeekly: true, theme: 'night', tutorial: true,
+    ownerMode: C ? C.owner : 'normal', custom: !!C
   };
   for (const t of G.teams) genRoster(t);
-  const d = TEAM_DEFS[T.id]; const fl = d.fac;
+  const d = defs[T.id]; const fl = d.fac;
   const f = (lv) => ({ lv: Math.max(0, lv), cond: ri(72, 92) });
-  G.stad = { name: d.stadium, cap: d.cap, dome: d.dome, hrF: d.hrF, owned: false, rent: d.rent, age: ri(18, 40), honey: 1,
+  G.stad = { name: d.stadium, cap: d.cap, dome: d.dome, hrF: d.hrF, owned: !!d.owned, rent: d.owned ? 0 : d.rent, age: C ? ri(5, 30) : ri(18, 40), honey: 1,
     fac: { seats: { lv: 0, cond: 100 }, vision: f(fl), food: f(fl), shop: f(fl), vip: f(fl - 1), amenity: f(fl), light: f(fl), turf: f(fl) } };
   G.tfac = { gym: f(fl), indoor: f(Math.max(1, fl - 1)), bullpen: f(fl), farm: f(fl), dorm: f(fl), medical: f(fl), analytics: f(fl - 1) };
   G.builds = []; G.project = null;
-  initTown(T);
+  initTown(T, C ? C.town : 'normal', C ? C.land : 'normal');
   G.fin = { cash: d.cash, y: { rev: {}, exp: {} }, m: { rev: 0, exp: 0 }, months: [], hist: [], loans: [], att: { g: 0, tot: 0, max: 0, sell: 0, list: [] }, lastRev: 400000 + d.market * 300000, lastAtt: 0, awayWeek: 0, capexY: 0 };
   const rm = tixRefMul(T);
   G.tix = { out: Math.round(TIX.out.ref * rm / 100) * 100, inn: Math.round(TIX.inn.ref * rm / 100) * 100, pre: Math.round(TIX.pre.ref * rm / 500) * 500 };
@@ -140,10 +163,12 @@ function newGame(o) {
   G.sponsors.offers.push(...genSponsorOffers('helmet', 2), ...genSponsorOffers('partner2', 1));
   G.naming = { main: null, farm: null, offers: [], solicit: 0, solicitKind: 'main' };
   G.owner = { trust: 55, startPop: T.pop, review: null, msgs: [] };
-  G.plan = { goals: [], start: START_YEAR, end: START_YEAR + 2, set: false };
+  G.plan = { goals: [], start: G.year, end: G.year + 2, set: false };
   G.camp = null; G.fallCamp = { on: true, theme: 'balance' }; G.winter = [];
   for (const t of G.teams) {
-    normalizeTeam(t, 63 + t.shift * 0.4 + rf(-0.5, 0.5));
+    let target = 63 + t.shift * 0.4 + rf(-0.5, 0.5);
+    if (C) target = t.id === T.id ? 63 + CUSTOM_STR[C.str].off + rf(-0.3, 0.3) : target + CUSTOM_AI[C.ai].off;
+    normalizeTeam(t, target);
     t.payBudget = aiPayBudget(t); autoRoster(t.id);
     const pay = teamPayroll(t.id); const lim = t.payBudget * 0.76;
     const f = clamp(lim / pay, 0.6, 2.2);
@@ -335,7 +360,7 @@ function yearEnd() {
   F.lastRev = rev0; F.lastAtt = F.att.tot;
   G.hist.user.push({ y: G.year, rank: T.lastRank, w: T.rec.w, l: T.rec.l, d: T.rec.d, lg: G.post && G.post.lgChamp.includes(T.id), champ: G.post && G.post.champ === T.id, att: F.att.tot, net: Math.round(yearTotal('rev') - yearTotal('exp')), trust: G.owner.trust });
   G.owner.review = review;
-  if (G.owner.trust <= 5) {
+  if (G.user.ownerMode !== 'none' && G.owner.trust <= (G.user.ownerMode === 'hard' ? 10 : 5)) {
     G.gameOver = { y: G.year, why: 'オーナーの信頼を失い、球団社長を解任されました' };
     addNews('owner', 'オーナー会議の結果、球団社長の解任が決まりました', { important: true, tid: T.id });
   }
@@ -365,6 +390,8 @@ function ownerReview(net) {
   const pl = planYearCheck(); if (pl.d) { d += pl.d; notes.push(...pl.notes); }
   if (G.fin.cash < 0) { const v = -Math.min(10, Math.round(-G.fin.cash / 100000 * 2) + 2); d += v; notes.push(['資金繰りの悪化', v]); }
   const over = (G.fin.capexY || 0) - G.budget.capex; if (over > 20000) { const v = -Math.min(5, Math.round(over / 50000) + 1); d += v; notes.push(['設備投資が予算超過', v]); }
+  const om = CUSTOM_OWNER[G.user.ownerMode || 'normal'] || CUSTOM_OWNER.normal;
+  if (om.k !== 1) { for (const n of notes) if (n[1] < 0) n[1] = Math.round(n[1] * om.k); d = sum(notes, n => n[1]); }
   G.owner.trust = clamp(60 + (G.owner.trust - 60) * 0.9 + d, 0, 100);
   G.owner.startPop = T.pop;
   return { y: G.year, d, notes, net, trust: G.owner.trust };
@@ -376,6 +403,7 @@ function newYear() {
   for (const id in G.players) { const p = G.players[id]; p.rel = null; p.ls = -99; p.fat = 0; p.ms = p.ms || null; if (p.adapt > 0) p.adapt = 0; }
   G.post = null; G.draft = null; G.awards = null; G.seasonTitles = null;
   G.faMarket = [];
+  G.town.visitY = 0;
   G.fin.y = { rev: {}, exp: {} }; G.fin.att = { g: 0, tot: 0, max: 0, sell: 0, list: [] }; G.fin.capexY = 0; G.fin.projY = 0; G.fin.rainouts = 0;
   G.flags.foodBoost = 0;
   G.camp = null;
@@ -473,6 +501,11 @@ function userTasks() {
   if (G.fin.cash < 0) add('cash', '資金がマイナスです。融資や経費削減を検討してください', 'finance', true);
   if (G.owner.trust < 20) add('trust', 'オーナーの信頼が低下しています', 'plan', true);
   if (t >= 40 && G.user.lastSeenWinter !== G.year && t <= 46) add('winter', '若手をウィンターリーグへ派遣できます（12月）', 'training');
+  if (G.week <= 2) {
+    const pm = G.month === 1 ? 12 : G.month - 1;
+    const season = Object.entries(TOWN_EVENTS).filter(([k, d]) => d.months && d.months.includes(G.month) && !d.months.includes(pm) && eventCanHost(k).ok);
+    if (season.length) { add('townev', `${season.map(([k, d]) => d.n).join('・')}を開ける時期です。街に人を呼びましょう`, 'town'); out[out.length - 1].tab = 'ev'; }
+  }
   return out;
 }
 
