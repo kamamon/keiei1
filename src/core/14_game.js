@@ -157,10 +157,9 @@ function newGame(o) {
   G.fc = { members: 0, fee: { kids: 1500, reg: 4500, pre: 15000 }, ben: 3, camp: 0, joinY: 0, lastRet: 0.8 };
   G.fc.members = Math.round(fcTarget() * 0.92);
   book('rev', 'fanclub', G.fc.members * fcAvgFee() / 10000);
-  G.sponsors = { cur: {}, offers: [] };
-  for (const slot of ['chest', 'sleeve', 'fence', 'partner1']) G.sponsors.cur[slot] = { co: pick(COMPANIES), annual: roundSal(sponsorValue(slot) * rf(0.85, 1.0)), yrs: ri(1, 3) };
-  G.sponsors.cur.helmet = null; G.sponsors.cur.partner2 = null;
-  G.sponsors.offers.push(...genSponsorOffers('helmet', 2), ...genSponsorOffers('partner2', 1));
+  G.sponsors = { cur: {}, offers: [], ng: {}, sol: {} };
+  for (const slot of ['chest', 'sleeve', 'partner1', 'backnet', 'fence', 'score']) G.sponsors.cur[slot] = { co: pick(COMPANIES), annual: roundSal(sponsorValue(slot) * rf(0.85, 1.0)), yrs: ri(1, 3), since: G.year - ri(0, 4) };
+  for (const [slot, n] of [['helmet', 2], ['partner2', 1], ['vision', 2], ['bench', 1]]) if (sponsorReq(slot).ok) G.sponsors.offers.push(...genSponsorOffers(slot, n));
   G.naming = { main: null, farm: null, offers: [], solicit: 0, solicitKind: 'main' };
   G.owner = { trust: 55, startPop: T.pop, review: null, msgs: [] };
   G.plan = { goals: [], start: G.year, end: G.year + 2, set: false };
@@ -496,7 +495,7 @@ function userTasks() {
   if (t === 40) add('release', '戦力外通告の時期です。来季の構想から外れる選手を整理しましょう', 'contracts');
   if (t >= 44 && t <= 47) { const n = renewalList().length; if (n) add('renew', `契約更改が${n}人残っています（12月第4週で締切）`, 'contracts', t >= 46); }
   if (t >= 44 || t <= 1) if (G.foreign.length) add('frn2', '外国人選手の補強を検討できます', 'foreign');
-  if (G.sponsors.offers.length) add('sponsor', `スポンサーの提案が${G.sponsors.offers.length}件届いています`, 'sponsor');
+  if (G.sponsors.offers.length) { const rn = G.sponsors.offers.filter(o => o.renew).length; add('sponsor', `スポンサー・広告の提案が${G.sponsors.offers.length}件届いています${rn ? `（うち契約更新${rn}件）` : ''}。広告料は交渉できます`, 'sponsor'); }
   if (G.naming.offers.length) add('naming', `ネーミングライツの提案が${G.naming.offers.length}件届いています`, 'sponsor');
   if (G.fin.cash < 0) add('cash', '資金がマイナスです。融資や経費削減を検討してください', 'finance', true);
   if (G.owner.trust < 20) add('trust', 'オーナーの信頼が低下しています', 'plan', true);
@@ -525,8 +524,18 @@ function deserialize(str) {
   for (const id in G.players) NAMESET.add(G.players[id].name);
   for (const p of G.prospects) NAMESET.add(p.name);
   for (const p of G.foreign) NAMESET.add(p.name);
+  migrateSave();
   touch();
   return G;
+}
+/* 古いセーブを今の仕組みに合わせる */
+function migrateSave() {
+  if (G.town) { computeTownStats(); if (G.town.stageMax == null) { G.town.stageMax = townStage().i; G.town.stageLog = []; } }
+  const S = G.sponsors; if (!S) return;
+  S.ng = S.ng || {}; S.sol = S.sol || {};
+  S.offers = S.offers.filter(o => SPONSOR_SLOTS[o.slot]);
+  for (const o of S.offers) dealEnsure('sp', o);
+  for (const o of G.naming.offers) dealEnsure('nm', o);
 }
 function saveSlot(slot) {
   try { localStorage.setItem(SAVE_KEY + slot, serialize()); localStorage.setItem(SAVE_KEY + slot + '_meta', JSON.stringify({ t: Date.now(), team: tName(G.user.tid), date: nowStr(), name: G.user.name })); return true; }

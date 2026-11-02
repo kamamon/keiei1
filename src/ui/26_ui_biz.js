@@ -125,26 +125,145 @@ ACT.nsType = el => { UI.f.ns.type = el.dataset.v; render(); };
 ACT.nsCap = el => { UI.f.ns.cap = +el.dataset.v; render(); };
 ACT.nsStart = () => { const r = startNewStadium(UI.f.ns.type, UI.f.ns.cap); if (r.ok) toast('新球場の建設を始めました', 'good'); else toast(r.why, 'bad'); render(); };
 
-/* ---------- スポンサー・ネーミングライツ ---------- */
+/* ---------- スポンサー・球場内広告・ネーミングライツ ---------- */
+function adStatus(slot) {
+  const S = G.sponsors;
+  if (!sponsorReq(slot).ok) return 'lock';
+  if (S.cur[slot]) return 'sold';
+  if (S.offers.some(o => o.slot === slot)) return 'offer';
+  if (S.sol && S.sol[slot]) return 'sol';
+  return 'open';
+}
+const AD_ST = { sold: '契約中', offer: '提案あり', sol: '営業中', open: '空き', lock: '未設置' };
+/* 球場の広告マップ（SVG）。枠ごとに、契約状況の色で塗る */
+const AD_SHAPES = {
+  seat: { s: '<path d="M22 116 L76 112 L200 236 L324 112 L378 116 L378 140 L200 268 L22 140 Z"/>', l: [346, 136, '座席'] },
+  concourse: { s: '<path class="ln dash" d="M16 146 L200 278 L384 146"/>', l: [356, 184, 'コンコース'] },
+  ribbon: { s: '<path class="ln" d="M151.5 210 L89.5 148 M248.5 210 L310.5 148"/>', l: [47, 164, 'リボンビジョン'] },
+  fence: { s: '<path class="ln" d="M76 112 Q200 -14 324 112"/>', l: [200, 68, '外野フェンス'] },
+  score: { s: '<rect x="160" y="6" width="80" height="24" rx="2"/>', l: [200, 22, 'スコアボード'], inside: true },
+  vision: { s: '<rect x="248" y="12" width="58" height="22" rx="2"/>', l: [277, 27, 'ビジョン'], inside: true },
+  pole: { s: '<rect x="72" y="86" width="7" height="28"/><rect x="321" y="86" width="7" height="28"/>', l: [60, 80, 'ポール'] },
+  bench: { s: '<rect x="160.5" y="217.3" width="24" height="8" transform="rotate(45 172.5 221.3)"/><rect x="215.5" y="217.3" width="24" height="8" transform="rotate(-45 227.5 221.3)"/>', l: [200, 208, 'ダッグアウト'] },
+  backnet: { s: '<rect x="168" y="244" width="64" height="8" rx="2"/>', l: [200, 296, 'バックネット裏LED'] },
+  wall: { s: '<rect x="8" y="268" width="84" height="26" rx="3"/>', l: [50, 285, '外壁看板'], inside: true }
+};
+function adMapSvg(sel) {
+  const order = ['seat', 'concourse', 'ribbon', 'fence', 'score', 'vision', 'pole', 'bench', 'backnet', 'wall'];
+  const spots = order.filter(k => SPONSOR_SLOTS[k]).map(k => {
+    const a = AD_SHAPES[k]; const st = adStatus(k);
+    return `<g class="ad ${st}${sel === k ? ' on' : ''}" data-a="adSel" data-k="${k}" role="button" tabindex="0" aria-label="${SPONSOR_SLOTS[k].n}：${AD_ST[st]}"><title>${SPONSOR_SLOTS[k].n}（${AD_ST[st]}）</title>${a.s}<text x="${a.l[0]}" y="${a.l[1]}" class="${a.inside ? 'in' : ''}">${a.l[2]}</text></g>`;
+  }).join('');
+  return `<svg class="admap" viewBox="0 0 400 304" role="group" aria-label="球場の広告マップ">
+    <path class="grass" d="M200 236 L76 112 Q200 -14 324 112 Z"/><path class="dirt" d="M200 248 L258 190 L200 132 L142 190 Z"/>
+    <path class="foul" d="M200 236 L76 112 M200 236 L324 112"/>
+    <rect class="base" x="196" y="232" width="8" height="8" transform="rotate(45 200 236)"/><rect class="base" x="240.5" y="188.5" width="7" height="7" transform="rotate(45 244 192)"/>
+    <rect class="base" x="196.5" y="144.5" width="7" height="7" transform="rotate(45 200 148)"/><rect class="base" x="152.5" y="188.5" width="7" height="7" transform="rotate(45 156 192)"/>
+    ${spots}</svg>
+    <div class="adleg">${['sold', 'offer', 'sol', 'open', 'lock'].map(k => `<span><i class="${k}"></i>${AD_ST[k]}</span>`).join('')}</div>`;
+}
+function dealTags(o) {
+  const t = [];
+  if (o.renew) t.push('<span class="tag b">契約更新</span>');
+  if (o.int >= 0.75) t.push('<span class="tag lamp">熱心</span>');
+  if (o.rd) t.push(`<span class="tag">交渉${o.rd}回目</span>`);
+  return t.join(' ');
+}
+function offerRow(kind, o, extra) {
+  return `<div class="lot-row"><div style="flex:1;min-width:150px"><b>${esc(o.co)}</b> ${dealTags(o)}<div class="small muted">${extra || ''}年${fmtOku(o.annual)}×${o.yrs}年・あと${o.exp}週</div></div>
+    <button class="btn sm pri" data-a="dealOpen" data-k="${kind}" data-id="${o.id}">交渉する</button><button class="btn sm" data-a="dealTake" data-k="${kind}" data-id="${o.id}">この条件で契約</button></div>`;
+}
+/* 枠の詳細（球場内広告の右側・ユニフォーム枠のカード） */
+function slotDetail(slot) {
+  const S = G.sponsors; const d = SPONSOR_SLOTS[slot]; const st = adStatus(slot); const c = S.cur[slot];
+  const stad = sponsorCat(slot) === 'stad'; const share = stad ? stadAdShare() : 1;
+  const offers = S.offers.filter(o => o.slot === slot);
+  let h = `<p class="small muted" style="margin:0 0 8px">${d.d || ''}</p><dl class="kv"><dt>相場（年）</dt><dd>${st === 'lock' ? '―' : fmtOku(sponsorValue(slot))}</dd>${stad ? `<dt>球団の取り分</dt><dd>${share < 1 ? '6割（球場を借りているため）' : '全額（球場を保有）'}</dd>` : ''}</dl>`;
+  if (st === 'lock') h += `<p class="small warn" style="margin:10px 0 0">${sponsorReq(slot).why}</p><button class="btn sm" style="margin-top:8px" data-a="go" data-v="stadium">球場・設備へ</button>`;
+  if (c) h += `<div class="lot-row" style="margin-top:10px"><div style="flex:1"><b>${esc(c.co)}</b> <span class="tag b">契約中</span><div class="small muted">年${fmtOku(c.annual)}${share < 1 ? `（球団の取り分 ${fmtOku(c.annual * share)}）` : ''}・残り${c.yrs}年</div></div></div><p class="small faint" style="margin:6px 0 0">契約が終わる年の12月に、更新の提案が届きます。人気が上がっていれば値上げを交渉できます。</p>`;
+  if (offers.length) h += `<div class="lot" style="margin-top:10px">${offers.map(o => offerRow('sp', o)).join('')}</div>`;
+  else if (st === 'sol') h += `<p class="small" style="margin:10px 0 0">営業中です。あと${S.sol[slot]}週で提案が届きます。</p>`;
+  else if (st === 'open') h += `<p class="small" style="margin:10px 0 6px">いまは空いています。</p><button class="btn sm pri" data-a="adSolicit" data-k="${slot}">企業に営業をかける</button>`;
+  return h;
+}
 SCREENS.sponsor = () => {
   const S = G.sponsors; const N = G.naming;
-  const slots = Object.entries(SPONSOR_SLOTS).map(([k, d]) => { const c = S.cur[k]; const offers = S.offers.map((o, i) => ({ o, i })).filter(x => x.o.slot === k);
-    return `<tr><td><b>${d.n}</b></td><td>${c ? `${esc(c.co)}<div class="small muted">年${fmtOku(c.annual)}・残り${c.yrs}年</div>` : '<span class="warn">募集中</span>'}</td><td>${offers.map(x => `<div class="row" style="margin-bottom:4px"><span class="small">${esc(x.o.co)}　年${fmtOku(x.o.annual)}×${x.o.yrs}年</span><button class="btn xs pri" data-a="spAccept" data-i="${x.i}">契約</button><span class="small faint">あと${x.o.exp}週</span></div>`).join('') || '<span class="faint small">提案なし</span>'}</td></tr>`; }).join('');
-  const tot = sum(Object.values(S.cur).filter(Boolean), c => c.annual);
-  const nOff = N.offers.map((o, i) => ({ o, i }));
-  const share = G.stad.owned ? 1 : 0.5;
-  const nrow = kind => { const c = N[kind]; const offers = nOff.filter(x => x.o.kind === kind);
-    return panel(kind === 'main' ? '本拠地球場のネーミングライツ' : '2軍球場のネーミングライツ', `${c ? `<p>現在の名称：<b>${esc(c.name)}</b>（${esc(c.co)}・年${fmtOku(c.annual)}・残り${c.yrs}年）</p>` : `<p class="muted">現在の名称：${kind === 'main' ? esc(G.stad.name) : '2軍球場'}（命名権は未販売）</p>`}
-      ${offers.map(x => `<div class="lot-row"><div style="flex:1"><b>${esc(x.o.name)}</b><div class="small muted">${esc(x.o.co)}　年${fmtOku(x.o.annual)}×${x.o.yrs}年${kind === 'main' && share < 1 ? `（球団の取り分 ${fmtOku(x.o.annual * share)}）` : ''}</div></div><button class="btn sm pri" data-a="nmAccept" data-i="${x.i}">この名称にする</button></div>`).join('')}
-      ${!c && !offers.length ? (N.solicit > 0 && N.solicitKind === kind ? `<p class="small">募集中…あと${N.solicit}週で提案が届きます</p>` : `<button class="btn" data-a="nmSolicit" data-k="${kind}">命名権の購入企業を募集する</button>`) : ''}
-      ${kind === 'main' && share < 1 ? '<p class="small muted">球場を借りているため、命名権料の半分は球場の持ち主に入ります。</p>' : ''}${kind === 'main' ? '<p class="small faint">名前が変わると、長年のファンの一部は少し残念がります。</p>' : ''}`); };
-  return `<h1 class="h1">スポンサー・ネーミングライツ</h1><p class="lead">提示額は球団の人気・市場規模・営業部長の力・営業活動費で変わります。毎年12月に契約が満了したスポンサー枠で新しい提案が届きます。</p>
-  ${panel(`ユニフォーム・球場広告（年${fmtOku(tot)}）`, `<div class="tw"><table class="t"><thead><tr><th>枠</th><th>現在の契約</th><th>届いている提案</th></tr></thead><tbody>${slots}</tbody></table></div>`, { flush: true })}
-  <div style="height:16px"></div><div class="grid g2">${nrow('main')}${nrow('farm')}</div>`;
+  for (const o of S.offers) if (!o.id) dealEnsure('sp', o);
+  for (const o of N.offers) if (!o.id) dealEnsure('nm', o);
+  const tab = getTab('sponsor', 'stad');
+  const keys = Object.keys(SPONSOR_SLOTS);
+  const stadK = keys.filter(k => sponsorCat(k) === 'stad'), uniK = keys.filter(k => sponsorCat(k) !== 'stad');
+  const sumOf = ks => sum(ks.filter(k => S.cur[k]), k => S.cur[k].annual);
+  const share = stadAdShare(); const nmShare = G.stad.owned ? 1 : 0.5;
+  const nOpen = keys.filter(k => ['open', 'offer', 'sol'].includes(adStatus(k))).length;
+  const sales = uStaff('sales');
+  const head = `<h1 class="h1">スポンサー・広告</h1><p class="lead">企業からの提案は、そのまま受けても、広告料を交渉してもかまいません。強気に出るほど高く売れることもありますが、相手の上限を大きく超える要求は決裂のもとです。</p>
+    <div class="panel" style="margin-bottom:16px">${tiles([['スポンサー（年）', fmtOku(sumOf(uniK))], ['球場内広告（年）', fmtOku(sumOf(stadK) * share), share < 1 ? '取り分6割' : '全額が球団に'], ['ネーミングライツ（年）', fmtOku((N.main ? N.main.annual * nmShare : 0) + (N.farm ? N.farm.annual : 0))], ['空いている枠', nOpen + '枠'], ['届いている提案', S.offers.length + N.offers.length + '件'], ['営業部長', sales ? esc(sales.name) : 'なし', sales ? `能力 ${sales.abil}${sales.abil >= 45 ? '・相手の上限を読める' : ''}` : '', 'txt']])}</div>
+    ${tabs('sponsor', [['stad', '球場内広告', S.offers.filter(o => sponsorCat(o.slot) === 'stad').length || null], ['uni', 'ユニフォーム・協賛', S.offers.filter(o => sponsorCat(o.slot) !== 'stad').length || null], ['naming', 'ネーミングライツ', N.offers.length || null]], tab)}`;
+  let body = '';
+  if (tab === 'stad') {
+    const sel = UI.sel.ad && SPONSOR_SLOTS[UI.sel.ad] ? UI.sel.ad : null;
+    const list = `<div class="adlist">${stadK.map(k => { const st = adStatus(k); const c = S.cur[k]; const n = S.offers.filter(o => o.slot === k).length;
+      const right = st === 'sold' ? `年${fmtOku(c.annual * share)}・残り${c.yrs}年` : st === 'offer' ? `提案${n}件` : st === 'sol' ? `あと${S.sol[k]}週` : st === 'lock' ? sponsorReq(k).why.replace('から販売できます', '') : `相場 年${fmtOku(sponsorValue(k))}`;
+      return `<button class="adrow" data-a="adSel" data-k="${k}"><i class="${st}"></i><span class="nm">${SPONSOR_SLOTS[k].n}</span><span class="r">${right}</span></button>`; }).join('')}</div>`;
+    body = `<div class="grid g2"><div class="panel"><div class="panel-b">${adMapSvg(sel)}</div></div>
+      ${sel ? panel(SPONSOR_SLOTS[sel].n, slotDetail(sel), { act: '<button class="btn sm" data-a="adSel" data-k="">一覧に戻る</button>' }) : panel('広告枠', list + `<p class="small muted" style="margin:10px 0 0">${share < 1 ? '球場を借りているため、球場内広告の収入の4割は球場の持ち主に入ります。球場を買い取ると全額が球団の収入になります。' : '球場を保有しているので、球場内広告の収入は全額が球団に入ります。'}</p>`)}</div>`;
+  } else if (tab === 'uni') {
+    body = `<div class="grid g2">${uniK.map(k => panel(SPONSOR_SLOTS[k].n, slotDetail(k))).join('')}</div>`;
+  } else {
+    const nrow = kind => { const c = N[kind]; const offers = N.offers.filter(o => o.kind === kind);
+      return panel(kind === 'main' ? '本拠地球場のネーミングライツ' : '2軍球場のネーミングライツ', `${c ? `<p>現在の名称：<b>${esc(c.name)}</b>（${esc(c.co)}・年${fmtOku(c.annual)}・残り${c.yrs}年）</p>` : `<p class="muted">現在の名称：${kind === 'main' ? esc(G.stad.name) : '2軍球場'}（命名権は未販売）</p>`}
+        <dl class="kv" style="margin-bottom:10px"><dt>相場（年）</dt><dd>${fmtOku(namingValue(kind))}</dd></dl>
+        ${offers.length ? `<div class="lot">${offers.map(o => offerRow('nm', o, `「${esc(o.name)}」　`)).join('')}</div>` : ''}
+        ${!c && !offers.length ? (N.solicit > 0 && N.solicitKind === kind ? `<p class="small">募集中…あと${N.solicit}週で提案が届きます</p>` : `<button class="btn" data-a="nmSolicit" data-k="${kind}">命名権の購入企業を募集する</button>`) : ''}
+        ${kind === 'main' && nmShare < 1 ? '<p class="small muted">球場を借りているため、命名権料の半分は球場の持ち主に入ります。</p>' : ''}${kind === 'main' ? '<p class="small faint">名前が変わると、長年のファンの一部は少し残念がります。</p>' : ''}`); };
+    body = `<div class="grid g2">${nrow('main')}${nrow('farm')}</div>`;
+  }
+  return head + body;
 };
+ACT.adSel = el => { UI.sel.ad = el.dataset.k || null; render(); };
+ACT.adSolicit = el => { if (solicitSponsor(el.dataset.k)) toast('営業を始めました。1〜3週で提案が届きます', 'good'); render(); };
 ACT.spAccept = el => { acceptSponsor(+el.dataset.i); toast('スポンサー契約を結びました', 'good'); render(); };
 ACT.nmAccept = el => { acceptNaming(+el.dataset.i); toast('ネーミングライツ契約を結びました', 'good'); render(); };
 ACT.nmSolicit = el => { G.naming.solicit = ri(2, 4); G.naming.solicitKind = el.dataset.k; toast('募集を始めました。数週間で提案が届きます'); render(); };
+
+/* ---------- 広告料・命名権料の交渉 ---------- */
+MODALS.deal = ({ kind, id }) => {
+  const o = dealFind(kind, id); if (!o) return null;
+  dealEnsure(kind, o);
+  const f = UI.f.deal && UI.f.deal.id === id && UI.f.deal.kind === kind ? UI.f.deal : (UI.f.deal = { kind, id, ask: roundSal(o.annual * 1.1), yrs: o.yrs });
+  const [y0, y1] = dealYearRange(kind);
+  const v = dealValue(kind, o); const mood = dealMood(o); const hint = dealHint(kind, o, f.yrs);
+  const share = kind === 'sp' ? (sponsorCat(o.slot) === 'stad' ? stadAdShare() : 1) : (o.kind === 'main' && !G.stad.owned ? 0.5 : 1);
+  const log = o.log.map(l => l.w === 'me' ? `<li class="me">あなた：年${fmtOku(l.a)}×${l.y}年でどうですか</li>`
+    : `<li class="co">${esc(o.co)}：${l.t === 'final' ? `年${fmtOku(l.a)}×${l.y}年。これが精一杯です` : `年${fmtOku(l.a)}×${l.y}年なら出せます`}</li>`).join('');
+  return { title: `${esc(o.co)}と交渉`, size: 'narrow', body: `<p class="small muted" style="margin:0 0 8px">${dealLabel(kind, o)}${kind === 'nm' ? `「${esc(o.name)}」` : ''}${o.renew ? '（契約更新）' : ''}</p>
+    <dl class="kv"><dt>相手の条件</dt><dd><b>年${fmtOku(o.annual)}</b>×${o.yrs}年</dd><dt>相場</dt><dd>年${fmtOku(v)}</dd><dt>相手が望む年数</dt><dd>${o.py}年</dd>
+      <dt>相手の様子</dt><dd><span class="${mood.c}">${mood.t}</span></dd><dt>営業部長の読み</dt><dd>${hint ? `上限は年${fmtOku(hint.lo)}〜${fmtOku(hint.hi)}くらい` : '<span class="faint">読めない</span>'}</dd></dl>
+    ${log ? `<ul class="dlog">${log}</ul>` : ''}
+    <hr class="sep">
+    <div class="field"><span>契約年数</span>${seg('dealYrs', Array.from({ length: y1 - y0 + 1 }, (_, i) => [y0 + i, (y0 + i) + '年']), f.yrs)}<span class="small muted">相手が望む年数から外れるほど、出せる額は下がります</span></div>
+    <div class="field" style="margin-top:10px"><span>こちらの希望額（年・万円）</span><div class="row"><input class="inp num" style="width:150px" type="number" step="100" min="0" value="${f.ask}" data-i="dealAsk" aria-label="希望額（万円）"><span class="small muted" id="dealFmt">${fmtOku(f.ask)}</span></div>
+      <div class="row" style="margin-top:6px">${[1.05, 1.1, 1.2].map(m => `<button class="btn xs" data-a="dealMul" data-v="${m}">相手の条件の${Math.round((m - 1) * 100)}%増し</button>`).join('')}<button class="btn xs" data-a="dealSet" data-v="${roundSal(v)}">相場</button>${hint ? `<button class="btn xs" data-a="dealSet" data-v="${hint.lo}">読みの下限</button>` : ''}</div></div>
+    ${share < 1 ? `<p class="small muted" style="margin:10px 0 0">球場を借りているため、球団に入るのは${share * 10}割です。</p>` : ''}`,
+    foot: `<button class="btn" data-a="closeModal">あとで</button><button class="btn" data-a="dealTake" data-k="${kind}" data-id="${id}">相手の条件で契約</button><button class="btn pri" data-a="dealGo" data-k="${kind}" data-id="${id}">この条件で提案する</button>` };
+};
+ACT.dealOpen = el => { const kind = el.dataset.k, id = +el.dataset.id; const o = dealFind(kind, id); if (!o) return; UI.f.deal = { kind, id, ask: roundSal(o.annual * 1.1), yrs: o.yrs }; openModal('deal', { kind, id }); render(); };
+ACT.dealYrs = el => { if (!UI.f.deal) return; UI.f.deal.yrs = +el.dataset.v; renderModalRoot(); };
+ACT.dealAsk = el => { const f = UI.f.deal; if (!f) return; f.ask = Math.max(0, Math.round(+el.value || 0)); const a = $('#dealFmt'); if (a) a.textContent = fmtOku(f.ask); };
+ACT.dealMul = el => { const f = UI.f.deal; if (!f) return; const o = dealFind(f.kind, f.id); if (!o) return; f.ask = roundSal(o.annual * +el.dataset.v); renderModalRoot(); };
+ACT.dealSet = el => { if (!UI.f.deal) return; UI.f.deal.ask = +el.dataset.v; renderModalRoot(); };
+ACT.dealGo = el => {
+  const kind = el.dataset.k, id = +el.dataset.id; const f = UI.f.deal; if (!f) return;
+  const o = dealFind(kind, id); if (!o) { closeModal(); render(); return; }
+  const co = o.co; const r = negotiateDeal(kind, id, f.ask, f.yrs);
+  if (r.res === 'signed') { toast(`${co}と合意しました（年${fmtOku(r.annual)}×${r.yrs}年）`, 'good'); closeModal(); }
+  else if (r.res === 'walk') { toast(r.angry ? `${co}は気分を害して、交渉を打ち切りました` : `${co}との交渉は決裂しました`, 'bad'); closeModal(); }
+  else if (r.res === 'counter') { toast(`${co}「年${fmtOku(r.annual)}×${r.yrs}年${r.final ? 'が精一杯です' : 'なら出せます'}」`); renderModalRoot(); }
+  else closeModal();
+  render();
+};
+ACT.dealTake = el => { const kind = el.dataset.k, id = +el.dataset.id; const o = dealFind(kind, id); if (!o) return; const co = o.co; if (takeDeal(kind, id)) toast(`${co}と契約しました（年${fmtOku(o.annual)}×${o.yrs}年）`, 'good'); if (UI.modal && UI.modal.k === 'deal') closeModal(); render(); };
 
 /* ---------- ファン・広報 ---------- */
 SCREENS.fans = () => {
@@ -197,7 +316,7 @@ SCREENS.town = () => {
   const nEv = (tw.events || []).length;
   const stg = townStage();
   const head = `<h1 class="h1">街づくり</h1><p class="lead">球場の周りに街をつくり、観客が来やすく、試合がない日も人が集まる「ボールパーク」を目指します。イベントで人を呼ぶと、空いている土地に民間の店や住宅が建ち、街が自然に育っていきます。</p>
-  <div class="panel" style="margin-bottom:16px">${tiles([['街の段階', stg.n, '段階 ' + stg.i + '／' + TOWN_STAGES.length, 'txt'], ['アクセス', st.acc], ['賑わい', st.vib, st.evVib ? `うちイベント +${st.evVib}` : ''], ['住民', fmtPeople(Math.round(st.pop))], ['地域の愛着', Math.round(tw.attach)], ['発展の勢い', Math.round(tw.dev || 0), (tw.dev || 0) >= DEV_START ? '民間の開発が進行中' : DEV_START + 'で民間の開発が始まる'], ['地価', '×' + tw.landIdx.toFixed(2)], ['街の収入', fmtOku(townWeeklyRevenue(curTurn() >= 11 && curTurn() <= 38)) + '／週']])}</div>
+  <div class="panel" style="margin-bottom:16px">${tiles([['街の段階', stg.n, `段階 ${stg.i}／${stg.max}`, 'txt'], ['アクセス', st.acc], ['賑わい', st.vib, st.vib !== st.vibBase ? `いつもの賑わい ${st.vibBase}` : ''], ['住民', fmtPeople(Math.round(st.pop))], ['地域の愛着', Math.round(tw.attach)], ['発展の勢い', Math.round(tw.dev || 0), (tw.dev || 0) >= DEV_START ? '民間の開発が進行中' : DEV_START + 'で民間の開発が始まる'], ['地価', '×' + tw.landIdx.toFixed(2)], ['街の収入', fmtOku(townWeeklyRevenue(curTurn() >= 11 && curTurn() <= 38)) + '／週']])}</div>
   ${tabs('town', [['map', '区画と建物'], ['ev', '街のイベント', nEv || null]], tab)}`;
   return head + (tab === 'ev' ? townEventsView() : townMapView());
 };
@@ -213,7 +332,7 @@ function townMapView() {
     else { ic = c.own ? '<span style="color:var(--lamp)">＋</span>' : ''; lb = c.own ? '空き地' : '売地 ' + fmtOku(landPrice(c)).replace('円', ''); }
     return `<button class="cell ${cls} ${UI.sel.cell === i ? 'sel' : ''}" data-a="cell" data-i="${i}" aria-label="${esc(lb)}">${c.b && c.b.lv > 1 ? `<span class="lvb">Lv${c.b.lv}</span>` : ''}<span class="ic">${ic}</span><span class="lb">${esc(lb)}</span></button>`;
   }).join('');
-  let side = '<p class="muted">区画を選ぶと、土地の購入や建物の建設ができます。球場の周り（隣接8マス）は飲食や商業の効果が2割増しです。</p><p class="small muted">「民」の印は、街の発展で民間が建てた建物です。賑わいや住民を増やしてくれます。</p>';
+  let side = null;
   if (sel) {
     if (sel.sp === 'stadium') side = `<p><b>${esc(stadiumName())}</b></p><button class="btn" data-a="go" data-v="stadium">球場・設備へ</button>`;
     else if (sel.sp === 'station') side = '<p>既存の最寄り駅です。駅からのアクセスは「シャトルバス乗り場」や「新駅」で改善できます。</p>';
@@ -233,7 +352,22 @@ function townMapView() {
       side = `<p class="small muted">球団の空き地です。建てる施設を選んでください。${nearStadium(sel) ? '<b>球場隣接のため飲食・商業の効果が2割増し。</b>' : ''}</p><div class="lot">${Object.entries(BLD).map(([k, d]) => { const c = canBuild(sel, k); return `<div class="lot-row"><span style="font-size:22px">${d.i}</span><div style="flex:1"><b>${d.n}</b> <span class="small muted">${fmtOku(d.cost)}・${d.wk}週・維持${fmtOku(d.maint)}/週</span><div class="small muted">${d.d}</div>${bldEffects(d, 1)}</div><button class="btn sm pri" data-a="bld" data-k="${k}" ${c.ok ? '' : `disabled title="${esc(c.why)}"`}>建てる</button></div>`; }).join('')}</div>`;
     }
   }
-  return `<div class="grid g2"><div class="panel"><div class="panel-b"><div class="town">${grid}</div></div></div>${panel(sel ? '選んだ区画' : '区画の操作', side)}</div>`;
+  const hint = '<p class="small muted" style="margin:10px 0 0">区画を選ぶと、土地の購入や建物の建設ができます（もう一度押すと選択を外します）。球場の周り（隣接8マス）は飲食や商業の効果が2割増し。「民」の印は、街の発展で民間が建てた建物です。</p>';
+  return `<div class="grid g2"><div class="panel"><div class="panel-b"><div class="town">${grid}</div>${hint}</div></div>${side ? panel('選んだ区画', side, { act: '<button class="btn sm" data-a="cellOff">選択を外す</button>' }) : panel('街の段階', townStageLadder())}</div>`;
+}
+/* 10段階の一覧。上ほど発展した姿 */
+function townStageLadder() {
+  const tw = G.town; const s = townStage(); const log = tw.stageLog || []; const top = Math.max(tw.stageMax || 0, s.i);
+  const rows = TOWN_STAGES.map(([t, n], k) => {
+    const i = k + 1; const at = log.find(l => l.i === i);
+    const cls = i === s.i ? 'cur' : i <= top ? 'done' : '';
+    const note = i === s.i ? 'いま' : at ? `${at.y}年${at.m}月` : i <= top ? '到達' : `賑わい${t}`;
+    return `<li class="${cls}"><span class="no">${i}</span><span class="nm">${n}</span><span class="th">${note}</span></li>`;
+  }).reverse().join('');
+  const prog = s.next != null
+    ? `<p class="small" style="margin:0 0 6px">次の「${s.nextN}」まで、いつもの賑わいがあと <b>${Math.max(1, s.next - Math.floor(s.v))}</b></p>${bar(s.v - s.cur, s.next - s.cur)}`
+    : '<p class="small" style="margin:0">最後の段階に到達しました。</p>';
+  return `${prog}<ol class="ladder">${rows}</ol><p class="small muted" style="margin:10px 0 0">段階は、建物と民間の店でできた「いつもの賑わい」で決まります（イベント中の上乗せは含みません）。新しい段階に届くたびに、地域の愛着・人気・ファンが少し増えます。</p>`;
 }
 function evEffects(d, m) {
   const out = [];
@@ -251,7 +385,8 @@ function townEventsView() {
   const running = evs.length ? `<div class="lot">${evs.map(e => { const d = TOWN_EVENTS[e.k]; return `<div class="lot-row"><span style="font-size:22px">${d.i}</span><div style="flex:1;min-width:160px"><b>${d.n}</b> <span class="small muted">残り${e.wk}週</span>${bar(e.tot - e.wk, e.tot)}</div></div>`; }).join('')}</div>`
     : '<p class="muted" style="margin:0">いま開いているイベントはありません。下の一覧から開催できます（同時に2つまで）。</p>';
   const dev = tw.dev || 0;
-  const devHtml = `${bar(dev, DEV_MAX, '', DEV_START)}<p class="small muted" style="margin:6px 0 0">勢いが${DEV_START}を超えると、空いている民有地に民間の店や住宅が建ち始めます。勢いはイベントや街の賑わいでたまり、建物が1つ建つたびに使われます。今年のイベント来場者：<b>${fmtPeople(tw.visitY || 0)}</b></p>`;
+  const sg = townStage();
+  const devHtml = `${bar(dev, DEV_MAX, '', DEV_START)}<p class="small" style="margin:8px 0 0">街の段階：<b>${sg.n}</b>（${sg.i}／${sg.max}）${sg.next != null ? `。次の「${sg.nextN}」まで、いつもの賑わいがあと${Math.max(1, sg.next - Math.floor(sg.v))}` : ''}</p><p class="small muted" style="margin:6px 0 0">勢いが${DEV_START}を超えると、空いている民有地に民間の店や住宅が建ち始めます。勢いはイベントや街の賑わいでたまり、建物が1つ建つたびに使われます。今年のイベント来場者：<b>${fmtPeople(tw.visitY || 0)}</b></p>`;
   const list = Object.entries(TOWN_EVENTS).map(([k, d]) => {
     const c = eventCanHost(k); const m = eventMult(k); const on = evs.some(e => e.k === k);
     const when = [d.months ? d.months.join('・') + '月' : '通年', d.off ? 'オフ限定' : '', `${d.wk}週間`].filter(Boolean).join('・');
@@ -261,7 +396,7 @@ function townEventsView() {
   const log = (tw.evLog || []).slice(0, 8);
   const logHtml = log.length ? `<ul class="tasks">${log.map(l => `<li><span>${TOWN_EVENTS[l.k].i} ${TOWN_EVENTS[l.k].n}</span><span class="small muted">${l.y}年${l.m}月・約${fmtPeople(l.visit)}</span></li>`).join('')}</ul>` : '<p class="muted" style="margin:0">まだ開催していません。</p>';
   return `<div class="grid g2 evgrid"><div class="stack">${panel('開催できるイベント', `<div class="lot">${list}</div>`)}</div>
-    <div class="stack">${panel('開催中', running)}${panel('発展の勢い', devHtml)}${panel('これまでのイベント', logHtml, { flush: !!log.length })}</div></div>`;
+    <div class="stack">${panel('開催中', running)}${panel('発展の勢いと街の段階', devHtml)}${panel('これまでのイベント', logHtml, { flush: !!log.length })}</div></div>`;
 }
 function bldEffects(d, m) {
   const L = { acc: 'アクセス', vib: '賑わい', pop: '住民', attach: '地域の愛着', fans: 'ファン', food: '飲食売上', goods: 'グッズ売上', heal: '故障回復', sat: '満足度', popw: '人気' };
@@ -273,7 +408,8 @@ function bldEffects(d, m) {
   if (d.academy) out.push('地元の有望株が増える');
   return `<div class="small" style="color:var(--ball)">${out.join('　')}</div>`;
 }
-ACT.cell = el => { UI.sel.cell = +el.dataset.i; render(); };
+ACT.cell = el => { const i = +el.dataset.i; UI.sel.cell = UI.sel.cell === i ? null : i; render(); };
+ACT.cellOff = () => { UI.sel.cell = null; render(); };
 ACT.buyLand = () => { const c = G.town.cells[UI.sel.cell]; if (buyLand(c)) toast('土地を購入しました', 'good'); render(); };
 ACT.bld = el => { const c = G.town.cells[UI.sel.cell]; const r = build(c, el.dataset.k); if (r.ok) toast('建設を始めました', 'good'); else toast(r.why, 'bad'); render(); };
 ACT.bldUp = () => { const c = G.town.cells[UI.sel.cell]; if (upgradeBld(c)) toast('拡張工事を始めました', 'good'); render(); };

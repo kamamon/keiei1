@@ -186,6 +186,7 @@ table.t.compact td { padding: 4px 6px; } table.t.compact th { padding: 5px 6px; 
 .mback { position: fixed; inset: 0; background: rgba(2, 12, 8, .62); z-index: 60; display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }
 .modal { background: var(--panel); border: 1px solid var(--line2); border-radius: 6px; width: 100%; max-width: 860px; box-shadow: var(--shadow); animation: pop .18s ease; }
 .modal.wide { max-width: 1080px; } .modal.narrow { max-width: 560px; }
+.modal.still { animation: none; }
 @keyframes pop { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
 .modal-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
 .modal-h h3 { margin: 0; font-size: 17px; }
@@ -254,12 +255,60 @@ table.t.compact td { padding: 4px 6px; } table.t.compact th { padding: 5px 6px; 
 .cell.priv { border-style: solid; border-color: transparent; background: rgba(140, 160, 200, .10); }
 .cell.priv .lb { color: var(--ink3); }
 .cell.priv::after { content: "民"; position: absolute; top: 3px; left: 5px; font-size: 9.5px; color: var(--ink3); }
+/* ===== 球場の広告マップ ===== */
+.admap { width: 100%; height: auto; display: block; max-width: 560px; margin: 0 auto; }
+.admap .grass { fill: rgba(79, 212, 139, .10); }
+.admap .dirt { fill: rgba(196, 150, 96, .16); }
+.admap .foul { stroke: var(--line2); stroke-width: 1.2; fill: none; }
+.admap .base { fill: var(--ink3); }
+.admap .ad { cursor: pointer; --c: var(--ink3); }
+.admap .ad > :not(text):not(title) { fill: var(--c); fill-opacity: .55; stroke: var(--c); stroke-width: 1.5; }
+.admap .ad .ln { fill: none !important; stroke-width: 6; stroke-linecap: round; stroke-opacity: .85; }
+.admap .ad .ln.dash { stroke-width: 4; stroke-dasharray: 7 5 !important; stroke-linecap: butt; }
+.admap .ad text { fill: var(--ink2); font-size: 10.5px; text-anchor: middle; font-family: var(--f-body); pointer-events: none; }
+.admap .ad text.in { fill: var(--ink); font-weight: 700; }
+.admap .ad.sold { --c: var(--ball); }
+.admap .ad.offer { --c: var(--lamp); }
+.admap .ad.sol { --c: var(--strike); }
+.admap .ad.open > :not(text):not(title) { fill-opacity: .12; stroke-dasharray: 4 3; }
+.admap .ad.lock { --c: var(--line2); cursor: default; }
+.admap .ad.lock > :not(text):not(title) { fill-opacity: .06; stroke-dasharray: 2 3; }
+.admap .ad.lock text { fill: var(--ink3); }
+.admap g.ad[data-k="seat"] > path { fill-opacity: .16; stroke-opacity: .5; }
+.admap g.ad[data-k="seat"].open > path, .admap g.ad[data-k="seat"].lock > path { fill-opacity: .05; }
+.admap .ad:hover > :not(text):not(title), .admap .ad:focus-visible > :not(text):not(title) { stroke: var(--ink); }
+.admap .ad.on > :not(text):not(title) { stroke: var(--ink); stroke-width: 2.5; }
+.admap .ad.on text { fill: var(--ink); font-weight: 700; }
+.admap .ad:focus { outline: none; }
+.adleg { display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: center; margin-top: 8px; font-size: 12px; color: var(--ink2); }
+.adleg i, .adrow i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; background: var(--ink3); }
+.adleg i.sold, .adrow i.sold { background: var(--ball); } .adleg i.offer, .adrow i.offer { background: var(--lamp); } .adleg i.sol, .adrow i.sol { background: var(--strike); }
+.adleg i.open, .adrow i.open { background: transparent; border: 1px dashed var(--ink3); } .adleg i.lock, .adrow i.lock { background: var(--line); }
+.adlist { display: grid; gap: 4px; }
+.adrow { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 8px; align-items: center; text-align: left; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel2); color: var(--ink); cursor: pointer; font-size: 13px; }
+.adrow:hover { border-color: var(--lamp); }
+.adrow .r { font-size: 12px; color: var(--ink2); font-family: var(--f-num); white-space: nowrap; }
+.dlog { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 4px; font-size: 12.5px; }
+.dlog li { padding: 5px 9px; border-radius: var(--r); background: var(--panel2); border-left: 3px solid var(--line2); }
+.dlog li.me { border-left-color: var(--team); }
+.dlog li.co { border-left-color: var(--lamp); }
+.ladder { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 3px; }
+.ladder li { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 10px; border-radius: var(--r); background: var(--panel2); color: var(--ink3); font-size: 13px; }
+.ladder li .no { font-family: var(--f-num); font-size: 12px; text-align: center; line-height: 20px; border: 1px solid var(--line2); border-radius: 3px; }
+.ladder li .nm { min-width: 0; overflow-wrap: anywhere; }
+.ladder li .th { font-family: var(--f-num); font-size: 11.5px; white-space: nowrap; }
+.ladder li.done { color: var(--ink2); }
+.ladder li.done .no { background: var(--ball); border-color: transparent; color: #04170d; }
+.ladder li.cur { color: var(--ink); background: var(--team-soft); box-shadow: inset 3px 0 0 var(--team); font-weight: 700; }
+.ladder li.cur .no { background: var(--lamp); border-color: transparent; color: var(--lamp-ink); }
+.ladder li.cur .th { color: var(--lamp); }
 .evrow { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel2); }
 .evrow .ei { font-size: 24px; line-height: 1; text-align: center; }
 .evrow .why { font-size: 11.5px; color: var(--ink3); grid-column: 2 / 4; }
 .evrow.on { border-color: var(--lamp); }
 .evfx { font-size: 12px; color: var(--ball); }
 @media (max-width: 860px) { .evgrid > :last-child { order: -1; } }
+@media (max-width: 480px) { .cell.priv::after { display: none; } }
 @media (max-width: 480px) { .evrow { grid-template-columns: 28px minmax(0, 1fr); } .evrow > .btn { grid-column: 2; justify-self: start; } .evrow .why { grid-column: 2; } }
 
 /* ===== チャート ===== */

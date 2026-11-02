@@ -128,6 +128,7 @@ function initTown(T, preset, land) {
     G.town.attach += 8; G.town.dev = 60;
   }
   computeTownStats();
+  G.town.stageMax = townStage().i; G.town.stageLog = [];
 }
 function cellAt(x, y) { return G.town.cells.find(c => c.x === x && c.y === y); }
 function nearStadium(c) { return Math.abs(c.x - STAD_XY[0]) <= 1 && Math.abs(c.y - STAD_XY[1]) <= 1; }
@@ -189,12 +190,36 @@ function computeTownStats() {
     st.gameRev += (d.game || 0) * m; st.heal += (d.heal || 0) * m; st.fans += (d.fans || 0) * m; st.academy += (d.academy || 0) * m;
   }
   for (const e of (tw.events || [])) st.evVib += TOWN_EVENTS[e.k].vib || 0;
+  st.vibBase = Math.round(st.vib);
   st.vib += st.evVib + (tw.dev || 0) * 0.03;
   st.vib = Math.round(st.vib); st.acc = Math.round(st.acc);
   tw.stat = st;
   tw.landIdx = 1 + Math.max(0, st.vib - st.evVib) / 150;
 }
-function townStage() { const v = G.town.stat.vib - (G.town.stat.evVib || 0); let n = TOWN_STAGES[0][1], i = 0; TOWN_STAGES.forEach(([t, l], k) => { if (v >= t) { n = l; i = k; } }); return { n, i: i + 1 }; }
+/* 段階は「いつもの賑わい」（イベント中の上乗せと発展の勢いの分を除く）で決める */
+function townStage(v) {
+  const st = G.town.stat;
+  if (v == null) v = st.vibBase != null ? st.vibBase : st.vib - (st.evVib || 0);
+  let i = 0; TOWN_STAGES.forEach(([t], k) => { if (v >= t) i = k; });
+  const nx = TOWN_STAGES[i + 1];
+  return { i: i + 1, n: TOWN_STAGES[i][1], v, cur: TOWN_STAGES[i][0], next: nx ? nx[0] : null, nextN: nx ? nx[1] : null, max: TOWN_STAGES.length };
+}
+/* 新しい段階に初めて届いたら、ニュースと小さなご褒美 */
+const STAGE_REWARD = { attach: 2, pop: 0.5, fansPer: 1 };
+function townStageCheck() {
+  const tw = G.town; const s = townStage();
+  if (tw.stageMax == null) { tw.stageMax = s.i; tw.stageLog = tw.stageLog || []; return; }
+  if (s.i <= tw.stageMax) return;
+  const T = uT(); tw.stageLog = tw.stageLog || [];
+  for (let i = tw.stageMax + 1; i <= s.i; i++) {
+    tw.attach = clamp(tw.attach + STAGE_REWARD.attach, 0, 100);
+    T.pop = clamp(T.pop + STAGE_REWARD.pop, 0, 99);
+    T.fans += STAGE_REWARD.fansPer * i;
+    tw.stageLog.push({ i, y: G.year, m: G.month });
+    addNews('town', `街が「${TOWN_STAGES[i - 1][1]}」に発展しました（段階${i}／${TOWN_STAGES.length}）。地域の愛着と人気が上がりました`, { important: true, tid: T.id });
+  }
+  tw.stageMax = s.i;
+}
 
 /* ---------- 街のイベント ---------- */
 function hasBld(k) { return G.town.cells.some(c => c.b && c.b.k === k && !c.b.wk); }
@@ -297,6 +322,7 @@ function townWeekly() {
   townEventsWeekly();
   privateDevelopment();
   computeTownStats();
+  townStageCheck();
   tw.attach = clamp(tw.attach + adEffect('attach') + BLD_EFFECT('attach') * 0.004 + tw.cells.filter(c => c.pv && PRIV_BLD[c.pv.k].attach).length * 0.004 - (tw.attach - 30) * 0.002 - Math.max(0, tw.attach - 60) * 0.004, 0, 100);
   uT().fans += tw.stat.fans * 0.05;
 }

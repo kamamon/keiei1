@@ -217,42 +217,168 @@ function weeklyPopularity(weekRes) {
   }
 }
 
-/* ---------- スポンサー ---------- */
+/* ---------- スポンサー・球場内広告 ---------- */
+function sponsorCat(slot) { return (SPONSOR_SLOTS[slot] && SPONSOR_SLOTS[slot].cat) || 'uni'; }
+/* 球場を借りていると、球場内広告の収入の4割は球場の持ち主に入る */
+function stadAdShare() { return G.stad.owned ? 1 : 0.6; }
+function sponsorReq(slot) {
+  const d = SPONSOR_SLOTS[slot];
+  if (d && d.req) for (const k in d.req) { const f = G.stad.fac[k]; if (!f || f.lv < d.req[k]) return { ok: false, why: `${STAD_FAC[k].n}Lv${d.req[k]}から販売できます` }; }
+  return { ok: true };
+}
+/* 枠の相場（年額・万円） */
 function sponsorValue(slot) {
   const T = uT(); const s = SPONSOR_SLOTS[slot];
   const sales = 0.85 + clamp(G.budget.sales / 20000, 0, 3) * 0.06 + ((uStaff('sales') ? uStaff('sales').abil : 40) - 50) * 0.004;
-  return s.base * (0.45 + T.pop / 100) * (0.6 + T.market * 0.12) * sales * (G.user.policy === 'profit' ? 1.05 : 1);
+  let ex = 1;
+  if (s.x === 'att') { const A = G.fin.att; const avgAtt = A && A.g ? A.tot / A.g : (G.fin.lastAtt ? G.fin.lastAtt / 71 : capOf(T.id) * 0.7); ex = clamp(avgAtt / 27000, 0.5, 1.6); }
+  else if (s.x === 'cap') ex = clamp(capOf(T.id) / 32000, 0.5, 1.6);
+  else if (s.x === 'town') { const st = G.town.stat; ex = 0.8 + (st.vibBase != null ? st.vibBase : st.vib || 10) / 120; }
+  else if (s.x === 'vision') ex = 0.5 + G.stad.fac.vision.lv * 0.25;
+  return s.base * ex * (0.45 + T.pop / 100) * (0.6 + T.market * 0.12) * sales * (G.user.policy === 'profit' ? 1.05 : 1);
+}
+function dealNewId() { G.dealId = (G.dealId || 0) + 1; return G.dealId; }
+/* 交渉用の隠れた値：max＝希望年数での上限、py＝希望年数、pat＝我慢できる回数、int＝熱意、hn＝営業部長の読みのぶれ */
+function dealFields(o, v, py, opt) {
+  opt = opt || {};
+  const int = opt.int != null ? opt.int : rf(0.2, 1);
+  const sales = uStaff('sales'); const ab = sales ? sales.abil : 40;
+  o.id = o.id || dealNewId();
+  o.int = Math.round(int * 100) / 100;
+  o.py = py; o.yrs = o.yrs || py;
+  o.max = Math.round(v * (0.97 + int * 0.22) * rf(0.96, 1.04));
+  o.pat = ri(1, 3) + (opt.renew ? 1 : 0) + (ab >= 70 ? 1 : 0);
+  o.hn = Math.round(rf(-1, 1) * 100) / 100;
+  o.rd = 0; o.log = []; o.final = false;
+  return o;
+}
+function makeSponsorOffer(slot, opt, exclude) {
+  opt = opt || {};
+  const S = G.sponsors; const ng = S.ng || {};
+  const pool = COMPANIES.filter(c => !(exclude && exclude.has(c)) && !(ng[c] > 0));
+  const co = opt.co || pick(pool.length ? pool : COMPANIES);
+  const py = opt.yrs || ri(1, 3);
+  const v = sponsorValue(slot) * (opt.renew ? 1.03 : 1);
+  const o = { slot, co, yrs: py, exp: opt.exp || 8, renew: !!opt.renew };
+  dealFields(o, v, py, opt);
+  o.annual = roundSal(Math.min(o.max * 0.96, v * rf(0.88, 1.02)));
+  return o;
 }
 function genSponsorOffers(slot, n) {
-  const offers = [];
-  for (let i = 0; i < (n || 2); i++) {
-    const yrs = ri(1, 3);
-    const v = sponsorValue(slot) * rf(0.82, 1.15) * (1 + (yrs - 1) * 0.03);
-    offers.push({ slot, co: pick(COMPANIES), annual: roundSal(v), yrs, exp: 8 });
-  }
-  return offers;
+  const ex = new Set(G.sponsors.offers.filter(o => o.slot === slot).map(o => o.co));
+  const out = [];
+  for (let i = 0; i < (n || 2); i++) { const o = makeSponsorOffer(slot, null, ex); ex.add(o.co); out.push(o); }
+  return out;
 }
 function sponsorWeekly() {
-  const S = G.sponsors;
+  const S = G.sponsors; S.sol = S.sol || {}; S.ng = S.ng || {};
   for (const slot in SPONSOR_SLOTS) {
-    if (!S.cur[slot] && !S.offers.some(o => o.slot === slot) && chance(0.08)) S.offers.push(...genSponsorOffers(slot, ri(1, 2)));
+    if (S.cur[slot] || !sponsorReq(slot).ok) continue;
+    if (S.sol[slot] > 0) { S.sol[slot]--; if (S.sol[slot] === 0) { delete S.sol[slot]; S.offers.push(...genSponsorOffers(slot, ri(2, 3))); addNews('biz', `${SPONSOR_SLOTS[slot].n}の営業に、企業から提案が届きました`, { tid: G.user.tid }); } continue; }
+    if (!S.offers.some(o => o.slot === slot) && chance(0.06)) S.offers.push(...genSponsorOffers(slot, ri(1, 2)));
   }
+  for (const c in S.ng) { S.ng[c]--; if (S.ng[c] <= 0) delete S.ng[c]; }
   S.offers.forEach(o => o.exp--);
-  S.offers = S.offers.filter(o => o.exp > 0);
-  let tot = 0; for (const k in S.cur) if (S.cur[k]) tot += S.cur[k].annual;
-  book('rev', 'sponsor', tot / 48);
+  S.offers = S.offers.filter(o => o.exp > 0 && SPONSOR_SLOTS[o.slot]);
+  let uni = 0, stad = 0;
+  for (const k in S.cur) { const c = S.cur[k]; if (!c || !SPONSOR_SLOTS[k]) continue; if (sponsorCat(k) === 'stad') stad += c.annual; else uni += c.annual; }
+  book('rev', 'sponsor', uni / 48);
+  if (stad) book('rev', 'stadad', stad * stadAdShare() / 48);
 }
-function acceptSponsor(i) {
-  const o = G.sponsors.offers[i]; if (!o) return;
-  G.sponsors.cur[o.slot] = { co: o.co, annual: o.annual, yrs: o.yrs };
+/* 空いている枠に営業をかける（数週間で提案が届く） */
+function solicitSponsor(slot) {
+  const S = G.sponsors; S.sol = S.sol || {};
+  if (S.cur[slot] || S.sol[slot] || !sponsorReq(slot).ok) return false;
+  S.sol[slot] = ri(1, 3); return true;
+}
+function acceptSponsorId(id) {
+  const o = G.sponsors.offers.find(x => x.id === id); if (!o) return false;
+  G.sponsors.cur[o.slot] = { co: o.co, annual: o.annual, yrs: o.yrs, since: G.year };
   G.sponsors.offers = G.sponsors.offers.filter(x => x.slot !== o.slot);
-  addNews('biz', `${SPONSOR_SLOTS[o.slot].n}のスポンサーに${o.co}が決定（年${fmtOku(o.annual)}・${o.yrs}年）`, { tid: G.user.tid });
+  if (G.sponsors.sol) delete G.sponsors.sol[o.slot];
+  addNews('biz', `${SPONSOR_SLOTS[o.slot].n}の${o.renew ? '契約を' + o.co + 'と更新' : 'スポンサーに' + o.co + 'が決定'}（年${fmtOku(o.annual)}・${o.yrs}年）`, { tid: G.user.tid });
+  return true;
 }
+function acceptSponsor(i) { const o = G.sponsors.offers[i]; if (o) { if (!o.id) o.id = dealNewId(); acceptSponsorId(o.id); } }
 function sponsorYearEnd() {
   const S = G.sponsors;
-  for (const k in S.cur) { const c = S.cur[k]; if (!c) continue; c.yrs--; if (c.yrs <= 0) { S.cur[k] = null; addNews('biz', `${SPONSOR_SLOTS[k].n}（${c.co}）の契約が満了しました`, { tid: G.user.tid }); } }
-  for (const slot in SPONSOR_SLOTS) if (!S.cur[slot]) S.offers.push(...genSponsorOffers(slot, ri(2, 3)));
+  for (const k in S.cur) {
+    const c = S.cur[k]; if (!c) continue; c.yrs--;
+    if (c.yrs > 0) continue;
+    S.cur[k] = null;
+    if (SPONSOR_SLOTS[k] && sponsorReq(k).ok && chance(0.8)) {
+      S.offers.push(makeSponsorOffer(k, { co: c.co, renew: true, int: rf(0.5, 1), exp: 10 }));
+      addNews('biz', `${SPONSOR_SLOTS[k].n}（${c.co}）の契約が満了しました。${c.co}から更新の提案が届いています`, { tid: G.user.tid });
+    } else addNews('biz', `${SPONSOR_SLOTS[k] ? SPONSOR_SLOTS[k].n : k}（${c.co}）の契約が満了しました`, { tid: G.user.tid });
+  }
+  for (const slot in SPONSOR_SLOTS) if (!S.cur[slot] && sponsorReq(slot).ok && S.offers.filter(o => o.slot === slot).length < 2) S.offers.push(...genSponsorOffers(slot, 1));
 }
+
+/* ---------- 広告料・命名権料の交渉 ---------- */
+/* kind：'sp'＝スポンサー・球場内広告、'nm'＝ネーミングライツ */
+function dealList(kind) { return kind === 'nm' ? G.naming.offers : G.sponsors.offers; }
+function dealYearRange(kind) { return kind === 'nm' ? [3, 10] : [1, 5]; }
+function dealFind(kind, id) { return dealList(kind).find(o => o.id === id) || null; }
+function dealValue(kind, o) { return kind === 'nm' ? namingValue(o.kind) : sponsorValue(o.slot); }
+function dealLabel(kind, o) { return kind === 'nm' ? (o.kind === 'main' ? '本拠地のネーミングライツ' : '2軍球場のネーミングライツ') : SPONSOR_SLOTS[o.slot].n; }
+/* 古いセーブの提案にも交渉用の値を持たせる */
+function dealEnsure(kind, o) {
+  if (o.max != null && o.py != null) return o;
+  const v = dealValue(kind, o);
+  dealFields(o, v, o.yrs, {});
+  o.max = Math.max(o.max, Math.round(o.annual * 1.03));
+  return o;
+}
+/* 希望年数から外れるほど、年額の上限は下がる */
+function dealReserve(kind, o, yrs) { const k = kind === 'nm' ? 0.025 : 0.04; return o.max * (1 - k * Math.abs(yrs - o.py)); }
+function dealMood(o) {
+  if (o.final || o.pat <= 0) return { t: 'これ以上は難しそう', c: 'neg' };
+  if (o.pat === 1) return { t: '慎重になっている', c: 'warn' };
+  return { t: o.int >= 0.6 ? 'ぜひ契約したい様子' : '前向き', c: 'pos' };
+}
+/* 営業部長の読み。能力が高いほど幅が狭く、正確 */
+function dealHint(kind, o, yrs) {
+  const s = uStaff('sales'); const ab = s ? s.abil : 40;
+  if (ab < 45) return null;
+  const err = ab >= 75 ? 0.04 : ab >= 60 ? 0.08 : 0.13;
+  const c = dealReserve(kind, o, yrs) * (1 + (o.hn || 0) * err * 0.5);
+  return { lo: roundSal(c * (1 - err)), hi: roundSal(c * (1 + err)) };
+}
+function dealSign(kind, o) {
+  if (kind === 'nm') { const i = G.naming.offers.indexOf(o); acceptNaming(i); }
+  else acceptSponsorId(o.id);
+}
+/* こちらの条件を出す。結果：signed（合意）／counter（相手が歩み寄り）／walk（決裂） */
+function negotiateDeal(kind, id, ask, yrs) {
+  const o = dealFind(kind, id); if (!o) return { res: 'gone' };
+  dealEnsure(kind, o);
+  const [y0, y1] = dealYearRange(kind);
+  yrs = clamp(Math.round(+yrs || o.yrs), y0, y1);
+  ask = roundSal(Math.max(0, +ask || 0));
+  if (yrs === o.yrs && ask <= o.annual) { dealSign(kind, o); return { res: 'signed', annual: o.annual, yrs: o.yrs }; }
+  const R = dealReserve(kind, o, yrs);
+  o.rd++; o.log.push({ w: 'me', a: ask, y: yrs });
+  if (ask <= R) { o.annual = ask; o.yrs = yrs; o.log.push({ w: 'co', t: 'ok', a: ask, y: yrs }); dealSign(kind, o); return { res: 'signed', annual: ask, yrs }; }
+  const gap = ask / R - 1;
+  o.pat -= gap > 0.25 ? 2 : 1;
+  /* 上限を大きく超える要求は、相手を怒らせて打ち切られることがある */
+  const angry = gap > 0.12 && chance(Math.min(0.6, (gap - 0.12) * 2.5));
+  if (o.pat < 0 || angry) {
+    const L = dealList(kind); L.splice(L.indexOf(o), 1);
+    G.sponsors.ng = G.sponsors.ng || {}; G.sponsors.ng[o.co] = 24;
+    addNews('biz', `${o.co}との${dealLabel(kind, o)}の交渉は決裂しました`, { tid: G.user.tid });
+    return { res: 'walk', co: o.co, angry: angry && o.pat >= 0 };
+  }
+  const prev = o.yrs === yrs ? o.annual : Math.min(o.annual, R * 0.9);
+  let next = prev + (Math.min(R, ask) - prev) * rf(0.35, 0.65);
+  next = roundSal(Math.min(Math.floor(R), Math.max(next, prev)));
+  o.annual = next; o.yrs = yrs;
+  o.final = o.pat === 0 || (R - next) / R < 0.03;
+  o.log.push({ w: 'co', t: o.final ? 'final' : 'counter', a: next, y: yrs });
+  return { res: 'counter', annual: next, yrs, final: o.final };
+}
+/* 相手の今の条件で契約する */
+function takeDeal(kind, id) { const o = dealFind(kind, id); if (!o) return false; dealSign(kind, o); return true; }
 
 /* ---------- ネーミングライツ ---------- */
 function namingValue(kind) {
@@ -261,19 +387,24 @@ function namingValue(kind) {
   return (8000 + capOf(T.id) * 0.06 + T.pop * 120 + T.market * 3000) * (G.stad.dome ? 1.1 : 1);
 }
 function genNamingOffers(kind) {
-  const out = [];
+  const out = []; const ng = G.sponsors.ng || {};
+  const pool = COMPANIES.filter(c => !(ng[c] > 0));
   for (let i = 0; i < 3; i++) {
-    const co = pick(COMPANIES); const yrs = ri(3, 8);
-    const v = namingValue(kind) * rf(0.8, 1.25) * (1 + (yrs - 3) * 0.02);
+    const co = pick(pool.length ? pool : COMPANIES); const yrs = ri(3, 8);
+    const base = namingValue(kind) * (1 + (yrs - 3) * 0.02);
+    const v = base * rf(0.85, 1.05);
     const suf = kind === 'farm' ? pick(['ファーム', 'フィールド', 'ボールパーク']) : (G.stad.dome ? 'ドーム' : pick(['スタジアム', 'フィールド', 'ボールパーク']));
     const name = co.replace(/(銀行|証券|生命|保険|製薬|自動車|電機|住建|化粧品|航空|食品|酒造|電工|通信|不動産|飲料|物産|旅行|楽器|ガス|運輸|製菓|電子|工業|薬局|商事|住宅)$/, '') + suf + (kind === 'farm' ? '' : (chance(0.5) ? uT().city : ''));
-    out.push({ kind, co, name, annual: roundSal(v), yrs, exp: 6 });
+    const o = { kind, co, name, yrs, exp: 6 };
+    dealFields(o, base, yrs, {});
+    o.annual = roundSal(Math.min(o.max * 0.96, v));
+    out.push(o);
   }
   return out;
 }
 function acceptNaming(i) {
   const o = G.naming.offers[i]; if (!o) return;
-  G.naming[o.kind] = { co: o.co, name: o.name, annual: o.annual, yrs: o.yrs };
+  G.naming[o.kind] = { co: o.co, name: o.name, annual: o.annual, yrs: o.yrs, since: G.year };
   G.naming.offers = G.naming.offers.filter(x => x.kind !== o.kind);
   if (o.kind === 'main') { uT().pop = clamp(uT().pop - 1, 0, 99); addNews('biz', `本拠地の名称が「${o.name}」に決定（年${fmtOku(o.annual)}・${o.yrs}年）`, { important: true, tid: G.user.tid }); }
   else addNews('biz', `2軍球場の名称が「${o.name}」に決定（年${fmtOku(o.annual)}）`, { tid: G.user.tid });
