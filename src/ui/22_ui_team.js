@@ -49,11 +49,12 @@ SCREENS.roster = () => {
   };
   const common = (pre) => [
     { k: 'num', l: '背番', v: p => p.num, h: p => `<span class="num">${numStr(p)}</span>`, num: true },
-    { k: 'name', l: '名前', v: p => p.name, h: p => `${pLink(p)} ${p.frn ? '<span class="tag">外</span>' : ''} ${statusTag(p)}` },
-    { k: 'pos', l: pre === 'p' ? '役割' : '位置', v: p => pre === 'p' ? roleOf(p) : p.pos, h: p => roleOf(p) },
+    { k: 'name', l: '名前', v: p => p.name, h: p => `${pLink(p)} ${p.frn ? '<span class="tag">外</span>' : ''}${genTag(p, true)} ${statusTag(p)}${mlbTrying(p) ? ' <span class="tag lamp">メジャー交渉中</span>' : ''}` },
+    { k: 'pos', l: pre === 'p' ? '役割' : '位置', v: p => pre === 'p' ? roleOf(p) : p.pos, h: p => posCell(p) },
     { k: 'age', l: '年齢', v: p => p.age, num: true, h: p => p.age },
     { k: 'ovr', l: '総合', v: ovr, h: p => av(ovr(p)) },
-    { k: 'pot', l: '伸びしろ', v: potv, h: p => gr(potv(p)), title: '能力の上限の目安' }
+    { k: 'pot', l: '伸びしろ', v: potv, h: p => gr(potv(p)), title: '能力の上限の目安' },
+    { k: 'sk', l: '特殊能力', v: skScore, h: skMini, title: '金・プラス・マイナスの特殊能力の数' }
   ];
   const tail = [
     { k: 'form', l: '調子', v: p => p.form, h: p => formTag(p.form) + ' ' + morDot(p.mor) },
@@ -92,7 +93,9 @@ ACT.rosterF = el => { UI.tab.rosterF = el.dataset.v; render(); };
 ACT.promoteIk = el => { const p = P_(+el.dataset.id); const r = promoteIkusei(p); if (!r.ok) toast(r.why || '登録できません', 'bad'); else toast(`${p.name}を支配下登録しました`, 'good'); render(); };
 
 /* ---------- 選手詳細 ---------- */
-ACT.player = el => { openModal('player', { id: +el.dataset.id }); render(); };
+/* モーダルの中から開いたときは差し替える（後ろに隠れないように） */
+function showModal(k, args) { if (UI.modal) replaceModal(k, args); else openModal(k, args); }
+ACT.player = el => { showModal('player', { id: +el.dataset.id }); render(); };
 MODALS.player = ({ id }) => {
   const p = findPlayer(id); if (!p) return { title: '選手', body: '<p>この選手はすでに球界を去りました。</p>' };
   if (p.pr && p.team === -2) return prospectModal(p);
@@ -107,6 +110,10 @@ MODALS.player = ({ id }) => {
   }).join('');
   const T = p.team >= 0 ? G.teams[p.team] : null;
   const fa = p.frn ? '外国人選手（FAの対象外）' : faEligible(p) ? '<span class="lamp">FA権あり（今オフ行使可能）</span>' : p.svc >= (p.faUsed ? p.faUsed + 4 : 8) ? 'FA権あり' : `取得まであと${(p.faUsed ? p.faUsed + 4 : 8) - p.svc}年`;
+  const kfa = p.frn ? '' : p.svc >= kfaNeed(p) ? '<span class="lamp">海外FA権あり</span>' : `海外FA権まであと${kfaNeed(p) - p.svc}年`;
+  const tryX = (G.mlbTry || []).find(x => x.pid === p.id);
+  const posts = mine && !postingCheck(p);
+  const stPos = !isP(p) && p.st && p.st.pos ? Object.entries(p.st.pos).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${POS_S[k] || k}${v}`).join(' ') : '';
   const rows = p.hist.slice().reverse().map(h => `<tr><td>${h.y}</td><td>${tMark(h.t)}</td>${isP(p) ? `<td class="num">${h.s.g}</td><td class="num">${h.s.w}-${h.s.l}</td><td class="num">${h.s.sv}</td><td class="num">${h.s.hld}</td><td class="num">${fmtIP(h.s.outs)}</td><td class="num">${h.s.so}</td><td class="num">${fmtEra(pEra(h.s))}</td>` :
     `<td class="num">${h.s.g}</td><td class="num">${h.s.pa}</td><td class="num">${fmtAvg(bAvg(h.s))}</td><td class="num">${h.s.hr}</td><td class="num">${h.s.rbi}</td><td class="num">${h.s.sb}</td><td class="num">${bOps(h.s).toFixed(3)}</td>`}<td class="num">${h.war}</td><td class="num">${fmtSal(h.sal)}</td></tr>`).join('');
   const s = p.st; const c = careerOf(p);
@@ -123,26 +130,31 @@ MODALS.player = ({ id }) => {
       ${p.lv === 1 ? `<button class="btn sm" data-a="move" data-id="${p.id}" data-to="2">2軍に下げる</button>` : p.lv === 2 ? `<button class="btn sm" data-a="move" data-id="${p.id}" data-to="1">1軍に上げる</button>` : `<button class="btn sm" data-a="promoteIk" data-id="${p.id}">支配下登録する</button>`}
       <label class="small muted">練習の重点 <select class="inp" data-c="setFocus" data-id="${p.id}">${opt('', 'おまかせ', p.focus)}${keys.map(k => opt(k, ATTR_JP[k], p.focus)).join('')}</select></label>
       ${p.yrs <= 1 && !(p.ren && p.ren.st === 'signed') && curTurn() < 40 ? `<button class="btn sm" data-a="extOpen" data-id="${p.id}">契約延長を打診</button>` : ''}
-      <button class="btn sm" data-a="tradeWith" data-id="${p.id}">トレードに出す</button>
-      <button class="btn sm danger" data-a="releaseAsk" data-id="${p.id}">戦力外にする</button>
-    </div>`;
-  } else if (p.team >= 0) actions = `<div class="row"><button class="btn sm team" data-a="tradeWith" data-id="${p.id}">トレードを申し込む</button></div>`;
-  else if (G.fapool.includes(p.id)) actions = `<div class="row"><button class="btn sm team" data-a="signFree" data-id="${p.id}">契約する（${fmtSal(p.fa ? p.fa.ask : MIN_SAL)}）</button></div>`;
+      <button class="btn sm" data-a="tradeWith" data-id="${p.id}" ${tryX ? 'disabled' : ''}>トレードに出す</button>
+      <button class="btn sm danger" data-a="releaseAsk" data-id="${p.id}" ${tryX ? 'disabled' : ''}>戦力外にする</button>
+      ${posts ? `<button class="btn sm" data-a="postAsk" data-id="${p.id}">ポスティングでメジャーへ</button>` : ''}
+      <button class="btn sm" data-a="peOpen" data-id="${p.id}">編集</button>
+    </div>
+    <div class="prac"><label class="small muted">特別練習 ${pracSelect(p)}</label>${pracBar(p)}<span class="small faint">サブポジションや特殊能力を、時間をかけて身につけます（キャンプ中は約3倍の速さ）。</span></div>`;
+  } else if (p.team >= 0) actions = `<div class="row"><button class="btn sm team" data-a="tradeWith" data-id="${p.id}">トレードを申し込む</button><button class="btn sm" data-a="peOpen" data-id="${p.id}">編集</button></div>`;
+  else if (G.fapool.includes(p.id)) actions = `<div class="row"><button class="btn sm team" data-a="signFree" data-id="${p.id}">契約する（${fmtSal(p.fa ? p.fa.ask : MIN_SAL)}）</button><button class="btn sm" data-a="peOpen" data-id="${p.id}">編集</button></div>`;
   return {
-    title: `<span class="num faint">${p.num >= 0 ? numStr(p) : ''}</span> ${esc(p.name)} <span class="small muted">${POS_JP[p.pos]}${isP(p) ? '（' + (p.pt === 'SP' ? '先発' : '救援') + '型）' : ''}</span>`, size: 'wide',
+    title: `<span class="num faint">${p.num >= 0 ? numStr(p) : ''}</span> ${esc(p.name)} <span class="small muted">${POS_JP[p.pos]}${isP(p) ? '（' + (p.pt === 'SP' ? '先発' : '救援') + '型）' : ''}</span> ${genTag(p)}`, size: 'wide',
     body: `<div class="grid g2">
       <div class="stack">
         <div class="row">${T ? emblem(T, 34) : ''}<div><div>${T ? esc(tName(T.id)) : '所属なし（自由契約）'} ${p.lv === 3 ? '<span class="tag">育成</span>' : p.lv === 1 ? '<span class="tag team">1軍</span>' : '<span class="tag">2軍</span>'} ${statusTag(p)}</div>
-          <div class="small muted">${p.age}歳　${handStr(p)}　${p.frn ? '外国人（' + esc(p.prFrom || '海外') + '）' : esc(REGIONS[p.home]) + '出身'}　${p.dr ? p.dr.y + '年ドラフト' + (p.dr.ik ? '育成' : '') + p.dr.r + '位' : esc(p.from || '')}</div></div></div>
+          <div class="small muted">${p.age}歳　${handStr(p)}　${p.frn ? '外国人（' + esc(p.prFrom || '海外') + '）' : esc(REGIONS[p.home]) + '出身'}　${p.dr ? p.dr.y + '年ドラフト' + (p.dr.ik ? '育成' : '') + p.dr.r + '位' : esc(p.from || '')}${p.prInfo && p.prInfo.nick ? '　「' + esc(p.prInfo.nick) + '」' : ''}</div></div></div>
         <div class="row" style="gap:20px"><div><div class="small muted">総合</div><div class="row">${gr(ovr(p))}<span class="stat-big">${ovr(p)}</span></div></div>
           <div><div class="small muted">伸びしろ</div><div>${mine ? gr(potv(p)) + ' <span class="small muted">' + GT[p.gt].n + '</span>' : '<span class="gr Q">?</span>'}</div></div>
           <div><div class="small muted">調子・やる気</div><div>${formTag(p.form)} ${formName(p.form)}　${morDot(p.mor)} ${Math.round(p.mor)}</div></div></div>
         <div class="stack">${attrs}</div>
         ${mine ? '<p class="small faint" style="margin:0">バーの縦線は現時点で見込める上限です。</p>' : ''}
+        ${!isP(p) ? `<div class="pdef"><span class="small muted">守備位置</span><span class="sub main">${POS_JP[p.pos]}</span>${subList(p).map(x => `<span class="sub l${x.lv}" title="${SUB_LVN[x.lv]}">${POS_JP[x.k]}${SUB_MARK[x.lv]}</span>`).join('')}${stPos ? `<span class="small faint">今季 ${stPos}</span>` : ''}</div>` : ''}
+        <div><div class="small muted" style="margin-bottom:4px">特殊能力</div>${skChips(p)}</div>
       </div>
       <div class="stack">
         <dl class="kv"><dt>年俸</dt><dd>${fmtSal(p.sal)}${p.ren && p.ren.st === 'signed' ? `<div class="small muted">来季 ${fmtSal(p.ren.sal)}・${p.ren.yrs}年</div>` : ''}</dd><dt>契約残り</dt><dd>${p.yrs}年</dd>
-          <dt>1軍在籍（FA）</dt><dd>${p.svc}年　<span class="small">${fa}</span></dd><dt>性格</dt><dd>${esc(PERS[p.per].n)}<div class="small muted">${esc(PERS[p.per].d)}</div></dd>
+          <dt>1軍在籍（FA）</dt><dd>${p.svc}年　<span class="small">${fa}</span>${kfa ? `<div class="small">${kfa}</div>` : ''}${tryX ? `<div class="small lamp">メジャー球団と交渉中（${HOW_JP[tryX.how]}・あと${Math.max(1, tryX.wk)}週ほど）</div>` : ''}</dd><dt>性格</dt><dd>${esc(PERS[p.per].n)}<div class="small muted">${esc(PERS[p.per].d)}</div></dd>
           <dt>故障のしやすさ</dt><dd>${p.inj >= 65 ? '<span class="neg">多い</span>' : p.inj >= 40 ? '普通' : '<span class="pos">少ない</span>'}${p.injW > 0 ? `<div class="small neg">${esc(p.injN)}（残り${Math.ceil(p.injW)}週）</div>` : ''}</dd>
           <dt>人気</dt><dd>${Math.round(p.pop)}</dd><dt>通算WAR</dt><dd>${careerWar(p)}</dd></dl>
         ${awards ? `<div class="row">${awards}</div>` : ''}
@@ -156,7 +168,35 @@ MODALS.player = ({ id }) => {
   };
 };
 ACT.setFocus = el => { const p = P_(+el.dataset.id); if (p) p.focus = el.value; toast(el.value ? `${p.name}は${ATTR_JP[el.value]}を重点的に鍛えます` : 'おまかせにしました'); };
-ACT.releaseAsk = el => { openModal('release', { id: +el.dataset.id }); render(); };
+function pracSelect(p) {
+  const opts = pracOptions(p); const cur = p.prac ? p.prac.k + ':' + p.prac.key : '';
+  const groups = {}; for (const o of opts) (groups[o.g] = groups[o.g] || []).push(o);
+  return `<select class="inp" data-c="setPrac" data-id="${p.id}">${opt('', 'なし', cur)}${Object.entries(groups).map(([g, l]) => `<optgroup label="${esc(g)}">${l.map(o => opt(o.v, o.l, cur)).join('')}</optgroup>`).join('')}</select>`;
+}
+function pracBar(p) { if (!p.prac) return ''; const v = pracProgress(p); return `<span class="row small" style="gap:6px"><span style="width:84px;display:inline-block">${bar(v * 100, 100, 'ball')}</span><span class="faint">${Math.round(v * 100)}%</span></span>`; }
+ACT.setPrac = el => {
+  const p = P_(+el.dataset.id); if (!p || p.team !== G.user.tid) return;
+  setPractice(p, el.value);
+  toast(el.value ? `${p.name}は特別練習「${pracLabel(p)}」に取り組みます` : `${p.name}の特別練習をやめました`);
+  render();
+};
+ACT.postAsk = el => { showModal('posting', { id: +el.dataset.id }); render(); };
+MODALS.posting = ({ id }) => {
+  const p = P_(id); if (!p) return null;
+  const why = postingCheck(p); const c = mlbInterest(p); const fee = postingFeeEst(p);
+  return { title: `${esc(p.name)}をポスティングにかけますか`, size: 'narrow', body: `<p>ポスティング制度でメジャー球団との交渉を認めます。獲得する球団が現れれば移籍し、球団は譲渡金を受け取ります。現れなければ残留します。</p>
+    <dl class="kv"><dt>メジャー球団の関心</dt><dd>${interestLabel(c)}</dd><dt>譲渡金の見込み</dt><dd>${fmtOku(roundSal(fee * 0.8))}〜${fmtOku(roundSal(fee * 1.25))}</dd><dt>本人の気持ち</dt><dd>${p.per === 'mlb' ? '<span class="pos">メジャー挑戦を熱望</span>' : '本人に意向を確かめます'}</dd><dt>交渉の期間</dt><dd>2〜4週間</dd></dl>
+    ${why ? `<p class="small neg">${esc(why)}</p>` : ''}<p class="small muted">交渉中はトレードや戦力外にできません。</p>`,
+    foot: `<button class="btn" data-a="closeModal">やめる</button><button class="btn pri" data-a="postGo" data-id="${id}" ${why ? 'disabled' : ''}>申請する</button>` };
+};
+ACT.postGo = el => {
+  const p = P_(+el.dataset.id); if (!p) return;
+  const r = userPosting(p);
+  closeModal();
+  if (r.ok) toast(`${p.name}のポスティングを申請しました。結果はお知らせで届きます`, 'good'); else toast(r.why, 'bad');
+  render();
+};
+ACT.releaseAsk = el => { const p = P_(+el.dataset.id); if (mlbTrying(p)) { toast('メジャー球団と交渉中の選手は戦力外にできません', 'bad'); return; } showModal('release', { id: +el.dataset.id }); render(); };
 MODALS.release = ({ id }) => {
   const p = P_(id); if (!p) return null;
   const c = releaseCost(p);
@@ -177,7 +217,7 @@ SCREENS.lineup = () => {
       const e = m.lu[i] || { id: -1, pos: SLOTS[i] }; const p = P_(e.id);
       const okp = p && p.team === ut && p.lv === 1 && p.injW === 0;
       return `<tr><td class="num">${i + 1}</td><td><select class="inp" data-c="luPos" data-i="${i}">${SLOTS.map(s => opt(s, POS_JP[s], e.pos)).join('')}</select></td>
-        <td><select class="inp" data-c="luPl" data-i="${i}">${opt(-1, '（自動で選ぶ）', okp ? e.id : -1)}${bats1.filter(x => x.injW === 0).map(x => opt(x.id, `${x.name}（${POS_S[x.pos]}・${ovr(x)}）`, e.id)).join('')}</select>${p && !okp ? ' <span class="tag o">出場できません</span>' : ''}</td>
+        <td><select class="inp" data-c="luPl" data-i="${i}">${opt(-1, '（自動で選ぶ）', okp ? e.id : -1)}${bats1.filter(x => x.injW === 0).map(x => opt(x.id, `${x.name}（${POS_S[x.pos]}${subStr(x)}・${ovr(x)}）`, e.id)).join('')}</select>${p && !okp ? ' <span class="tag o">出場できません</span>' : ''}</td>
         <td class="num">${okp ? fmtAvg(bAvg(p.st)) : ''}</td><td class="num">${okp ? p.st.hr : ''}</td><td>${okp ? av(p.a.con) : ''}</td><td>${okp ? av(p.a.pow) : ''}</td><td>${okp ? av(p.a.spd) : ''}</td><td>${okp ? fitLabel(p, e.pos) : ''}</td></tr>`;
     }).join('')}</tbody></table>`;
     const pSel = (key, i, cur) => `<select class="inp" data-c="pitSel" data-k="${key}" data-i="${i}">${opt(-1, '（自動）', cur == null ? -1 : cur)}${pits1.filter(x => x.injW === 0).map(x => opt(x.id, `${x.name}（${x.pt === 'SP' ? '先' : '救'}・${ovr(x)}）`, cur)).join('')}</select>`;
@@ -186,7 +226,7 @@ SCREENS.lineup = () => {
       <div class="row" style="margin-bottom:6px"><span style="width:84px">セットアッパー</span>${pSel('su', 0, m.su[0])}</div><div class="row" style="margin-bottom:6px"><span style="width:84px">7回担当</span>${pSel('su', 1, m.su[1])}</div>
       <p class="small muted">そのほかの投手は監督が状況に応じて起用します。故障や疲労で投げられない投手は自動で代わりを立てます。</p></div></div>`;
   } else {
-    lineupHtml = `<table class="t"><thead><tr><th>打順</th><th>守備</th><th>選手</th><th class="num">打率</th><th class="num">本</th><th class="num">打点</th><th>ミート</th><th>パワー</th><th>走力</th></tr></thead><tbody>${lu.map((x, i) => `<tr><td class="num">${i + 1}</td><td>${POS_JP[x.pos]}</td><td>${pLink(x.p)}</td><td class="num">${fmtAvg(bAvg(x.p.st))}</td><td class="num">${x.p.st.hr}</td><td class="num">${x.p.st.rbi}</td><td>${av(x.p.a.con)}</td><td>${av(x.p.a.pow)}</td><td>${av(x.p.a.spd)}</td></tr>`).join('')}</tbody></table>`;
+    lineupHtml = `<table class="t"><thead><tr><th>打順</th><th>守備</th><th>選手</th><th class="num">打率</th><th class="num">本</th><th class="num">打点</th><th>ミート</th><th>パワー</th><th>走力</th></tr></thead><tbody>${lu.map((x, i) => `<tr><td class="num">${i + 1}</td><td>${POS_JP[x.pos]}${x.pos !== 'DH' && subKey(x.pos) !== x.p.pos ? ` <span class="small">${fitLabel(x.p, x.pos)}</span>` : ''}</td><td>${pLink(x.p)}</td><td class="num">${fmtAvg(bAvg(x.p.st))}</td><td class="num">${x.p.st.hr}</td><td class="num">${x.p.st.rbi}</td><td>${av(x.p.a.con)}</td><td>${av(x.p.a.pow)}</td><td>${av(x.p.a.spd)}</td></tr>`).join('')}</tbody></table>`;
     pitHtml = `<div class="grid g2"><div><h4 style="margin:0 0 6px">先発ローテーション</h4><table class="t compact"><tbody>${R.rot.map((id, i) => { const p = P_(id); return `<tr><td class="num">${i + 1}</td><td>${pLink(p)}</td><td class="num">${p.st.w}勝${p.st.l}敗</td><td class="num">防${fmtEra(pEra(p.st))}</td></tr>`; }).join('')}</tbody></table></div>
       <div><h4 style="margin:0 0 6px">救援</h4><table class="t compact"><tbody>${[['抑え', R.cl]].concat(R.su.map((id, i) => [i ? '7回担当' : 'セットアッパー', id])).concat(R.mr.map(id => ['中継ぎ', id])).map(([l, id]) => { const p = P_(id); return p ? `<tr><td class="small muted">${l}</td><td>${pLink(p)}</td><td class="num">${p.st.sv ? p.st.sv + 'S' : p.st.hld + 'H'}</td><td class="num">防${fmtEra(pEra(p.st))}</td></tr>` : ''; }).join('')}</tbody></table></div></div>`;
   }
@@ -198,10 +238,15 @@ SCREENS.lineup = () => {
   <div class="stack">
     ${panel('スタメン（指名打者あり）', lineupHtml, { flush: true })}
     ${panel('投手陣', pitHtml)}
-    ${panel('ベンチの野手', bench.length ? `<div class="row">${bench.map(p => `<span class="tag">${pLink(p)} ${POS_S[p.pos]} ${ovr(p)}${p.injW ? ' 故障' : ''}</span>`).join('')}</div>` : '<span class="muted">なし</span>')}
+    ${panel('ベンチの野手', bench.length ? `<div class="row">${bench.map(p => `<span class="tag">${pLink(p)} ${POS_S[p.pos]}${subStr(p)} ${ovr(p)}${p.injW ? ' 故障' : ''}</span>`).join('')}</div>` : '<span class="muted">なし</span>')}
   </div>`;
 };
-function fitLabel(p, pos) { const f = fitPos(p, pos); return f >= 1 ? '<span class="pos">本職</span>' : f >= 0.85 ? '<span class="warn">こなせる</span>' : '<span class="neg">不慣れ</span>'; }
+function fitLabel(p, pos) {
+  if (pos === 'DH' || subKey(pos) === p.pos) return '<span class="pos">本職</span>';
+  const lv = subLv(p, pos);
+  if (lv) return `<span class="${lv >= 2 ? 'pos' : 'warn'}" title="${SUB_LVN[lv]}">サブ${SUB_MARK[lv]}</span>`;
+  return fitPos(p, pos) >= 0.75 ? '<span class="warn">経験なし</span>' : '<span class="neg">不慣れ</span>';
+}
 ACT.luMode = el => { G.user.lineupMode = el.dataset.v; if (el.dataset.v === 'manual' && !G.user.manual.lu.length) copyAutoToManual(); touch(); render(); };
 function copyAutoToManual() {
   const ut = G.user.tid; const save = G.user.lineupMode; G.user.lineupMode = 'auto'; touch();
@@ -234,11 +279,14 @@ SCREENS.training = () => {
     { k: 'ovr', l: '総合', v: ovr, h: p => av(ovr(p)) },
     { k: 'pot', l: '伸びしろ', v: potv, h: p => gr(potv(p)) + ' <span class="small faint">' + GT[p.gt].n + '</span>' },
     { k: 'grow', l: '今年の成長', v: p => p.grow || 0, num: true, h: p => { const g = (p.grow || 0) / (isP(p) ? 4 : 6); return `<span class="${g > 0.2 ? 'pos' : g < -0.2 ? 'neg' : 'faint'}">${g >= 0 ? '+' : ''}${g.toFixed(1)}</span>`; }, title: '能力の平均的な変化' },
-    { k: 'focus', l: '練習の重点', h: p => `<select class="inp" data-c="setFocus" data-id="${p.id}">${opt('', 'おまかせ', p.focus)}${(isP(p) ? PIT_KEYS : BAT_KEYS).map(k => opt(k, ATTR_JP[k], p.focus)).join('')}</select>` }
+    { k: 'focus', l: '練習の重点', h: p => `<select class="inp" data-c="setFocus" data-id="${p.id}">${opt('', 'おまかせ', p.focus)}${(isP(p) ? PIT_KEYS : BAT_KEYS).map(k => opt(k, ATTR_JP[k], p.focus)).join('')}</select>` },
+    { k: 'sub', l: '守れる位置', v: p => subList(p).length, h: p => isP(p) ? '' : subTags(p, { empty: '<span class="faint">―</span>' }) },
+    { k: 'sk', l: '特殊能力', v: skScore, h: skMini },
+    { k: 'prac', l: '特別練習', v: p => p.prac ? 1 + pracProgress(p) : 0, h: p => `<div class="stack" style="gap:4px">${pracSelect(p)}${pracBar(p)}</div>` }
   ];
   if (winterOpen) cols.push({ k: 'w', l: 'ウィンターリーグ', h: p => p.age <= 25 ? `<label class="chk small"><input type="checkbox" data-c="winter" data-id="${p.id}" ${G.winter.includes(p.id) ? 'checked' : ''}>派遣</label>` : '' });
   const ti = TRAIN_INT[G.user.train];
-  return `<h1 class="h1">育成・練習</h1><p class="lead">練習の強度と、選手ごとの重点項目を決めます。成長はコーチの指導力・施設・育成費・やる気・出場機会で変わります。</p>
+  return `<h1 class="h1">育成・練習</h1><p class="lead">練習の強度と、選手ごとの重点項目を決めます。成長はコーチの指導力・施設・育成費・やる気・出場機会で変わります。「特別練習」では、サブポジション（守れる位置）や特殊能力を時間をかけて身につけられます。</p>
   <div class="grid g2">
     ${panel('チームの練習量', `${seg('trainInt', Object.entries(TRAIN_INT).map(([k, v]) => [k, v.n]), G.user.train)}<p class="small muted" style="margin:8px 0 0">${esc(ti.d)}（成長×${ti.grow}・故障×${ti.inj}）</p>`)}
     ${panel('育成を支える体制', `<dl class="kv"><dt>打撃コーチ</dt><dd>${gr(coach('bat'))}</dd><dt>投手コーチ</dt><dd>${gr(coach('pit'))}</dd><dt>2軍監督</dt><dd>${gr(coach('farm'))}</dd><dt>育成コーチ</dt><dd>${gr(coach('ikusei'))}</dd><dt>育成費</dt><dd>${fmtOku(G.budget.dev)}／年</dd><dt>成長の補正（リーグ全体）</dt><dd>${Math.round((G.growAdj || 1) * 100)}%</dd></dl>`, { act: '<button class="btn sm" data-a="go" data-v="staff">スタッフ</button><button class="btn sm" data-a="go" data-v="stadium" data-tab="team">施設</button>' })}

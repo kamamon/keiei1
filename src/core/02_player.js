@@ -66,7 +66,7 @@ function makePlayer(o) {
     inj: clamp(Math.round(rn(40, 18)), 5, 95), per: pickPers(), pop: 0, mor: ri(52, 70), form: 0, fat: 0, injW: 0, injN: '',
     sal: MIN_SAL, yrs: 1, svc: 0, num: -1, team: -1, lv: 2, orig: -1, join: G.year, from: o.from || '', home: o.home !== undefined ? o.home : wpick([0, 1, 2, 3, 4, 5], i => REGION_W[i]),
     st: null, car: null, hist: [], focus: '', dr: null, faUsed: 0, wkG: 0, rel: null, ls: -99, adapt: 0, fa: null, ikusei: false,
-    note: '', grow: 0
+    note: '', grow: 0, sub: {}, sx: {}, sk: {}, prac: null, gen: !!o.gen
   };
   if (pos === 'P') { p.thr = chance(0.3) ? 'L' : 'R'; p.bats = chance(0.25) ? 'L' : 'R'; }
   else {
@@ -75,6 +75,8 @@ function makePlayer(o) {
     if (p.thr === 'L') p.bats = chance(0.85) ? 'L' : 'R';
   }
   genAttrs(p, o.cur, o.pot);
+  genSubs(p);
+  genSkills(p, o.gen ? 1 : 0);
   p.st = isP(p) ? blankPit() : blankBat();
   p.car = isP(p) ? blankPit() : blankBat();
   return p;

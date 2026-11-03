@@ -67,6 +67,7 @@ function negotiate(p, offer, yrs) {
   return { res: 'refused', need };
 }
 function applyContractsYearEnd() {
+  const arb = [];
   for (const T of G.teams) for (const p of roster(T.id)) {
     const R = p.ren;
     if (R && R.st === 'signed') { p.sal = R.sal; p.yrs = R.yrs; }
@@ -75,10 +76,12 @@ function applyContractsYearEnd() {
         const s = roundSal(((R.lastOff || R.off) + R.dem) / 2);
         p.sal = s; p.yrs = 1; p.mor = clamp(p.mor - 8, 0, 100);
         addNews('contract', `${p.name}は年俸調停の結果${fmtSal(s)}で決着`, { tid: T.id });
+        arb.push(p.name);
       } else { p.sal = calcDemand(p); p.yrs = 1; }
     } else p.yrs--;
     p.ren = null;
   }
+  if (arb.length) notify('contract', `契約更改で合意できなかった${arb.length}人は、年俸調停で決着しました（${arb.slice(0, 5).join('、')}${arb.length > 5 ? 'ほか' : ''}）。やる気が少し下がっています`, { go: 'contracts', tab: 'pay' });
 }
 function aiRenewals(tid) {
   const T = G.teams[tid];
@@ -134,19 +137,22 @@ function promoteIkusei(p) {
   if (p.sal < MIN_SAL) p.sal = MIN_SAL;
   if (p.ren && p.ren.sal < MIN_SAL) p.ren.sal = MIN_SAL;
   p.mor = clamp(p.mor + 15, 0, 100);
-  if (isUser(p.team)) addNews('contract', `育成の${p.name}を支配下登録しました（背番号${p.num}）`, { tid: p.team, important: true });
+  if (isUser(p.team)) addNews('contract', `育成の${p.name}を支配下登録しました（背番号${p.num}）`, { tid: p.team, important: true, note: false });
   return { ok: true };
 }
 
 /* ---------- FA ---------- */
 function faEligible(p) { const need = p.faUsed ? p.faUsed + 4 : 8; return !p.frn && p.svc >= need && p.yrs <= 1 && !(p.ren && p.ren.st === 'signed') && p.lv !== 3; }
 function faRank(p) { const ss = shihai(p.team).filter(x => !x.frn).sort((a, b) => b.sal - a.sal); const i = ss.indexOf(p); return i < 3 ? 'A' : i < 10 ? 'B' : 'C'; }
-function declareFA() {
+function declareFA(mlbBack) {
   G.faMarket = []; G.compPending = G.compPending || [];
   for (const T of G.teams) for (const p of shihai(T.id)) {
-    if (!faEligible(p)) continue;
+    if (!faEligible(p) || mlbTrying(p)) continue;
     const o = ovr(p);
-    if (p.svc >= 9 && p.age <= 33 && ((p.per === 'mlb' && o >= 72) || o >= 82) && chance(p.per === 'mlb' ? 0.6 : 0.2)) { leaveToMLB(p, '海外FA権を行使', 0); continue; }
+    if (kfaEligible(p) && p.age <= 33 && ((p.per === 'mlb' && o >= 70) || o >= 78) && chance(p.per === 'mlb' ? 0.6 : 0.25)) {
+      if (isUser(T.id)) queueEvent('kfa', kfaOffer(p)); else startMLB(p, 'kfa');
+      continue;
+    }
     let pd = 0.07 + (o - 60) * 0.008;
     if (p.per === 'money') pd += 0.2; if (p.per === 'loyal') pd -= 0.1; if (p.mor < 40) pd += 0.15; if (p.age >= 34) pd -= 0.08; if (p.lv === 2 && o >= 60) pd += 0.1;
     if (teamRank(T.id) >= 5) pd += 0.05;
@@ -157,8 +163,9 @@ function declareFA() {
     G.faMarket.push({ id: p.id, from: T.id, rank, ask, askYrs, offers: {}, done: false, prevSal: p.sal });
     p.fa = { kind: 'fa', from: T.id };
     removeFromTeam(p);
-    addNews('fa', `${tShort(T.id)}の${p.name}（${POS_JP[p.pos]}・${p.age}歳）がFA権を行使（${rank}ランク）`, { important: isUser(T.id) || o >= 70, tid: T.id });
+    addNews('fa', `${tShort(T.id)}の${p.name}（${POS_JP[p.pos]}・${p.age}歳）がFA権を行使（${rank}ランク）`, { important: isUser(T.id) || o >= 70, tid: T.id, note: isUser(T.id) ? 'hi' : false, pid: p.id });
   }
+  if (mlbBack && mlbBack.length) mlbReturnToMarket(mlbBack);
 }
 function faNeed(T, p) {
   const tid = T.id; const o = ovr(p);
@@ -180,7 +187,7 @@ function aiFABids() {
       const room = T.payBudget - teamPayroll(T.id, true) - pendingFASpend(T.id);
       if (room < f.ask * 0.8) continue;
       const o = ovr(p);
-      const base = (o - 62) / 20 + faNeed(T, p) + (f.from === T.id ? 0.35 : 0) + (T.market - 3) * 0.08 - (p.age >= 33 ? 0.2 : 0);
+      const base = (o - 62) / 20 + faNeed(T, p) + (f.from === T.id || f.prev === T.id ? 0.35 : 0) + (T.market - 3) * 0.08 - (p.age >= 33 ? 0.2 : 0);
       if (!chance(clamp(base, 0, 0.85))) continue;
       f.offers[T.id] = { sal: roundSal(f.ask * rf(0.92, 1.12) * (1 + (T.market - 3) * 0.03)), yrs: clamp(f.askYrs + ri(-1, 1), 1, 5) };
     }
@@ -193,7 +200,7 @@ function faUtility(p, f, o) {
   const pop = (T.pop - 50) / 50;
   const town = isUser(o.tid) ? G.town.stat.vib / 120 : (T.market - 3) * 0.08;
   const home = T.region === p.home ? 0.08 : 0;
-  const former = o.tid === f.from ? (p.per === 'loyal' ? 0.25 : 0.06) : 0;
+  const former = o.tid === f.from || o.tid === f.prev ? (p.per === 'loyal' ? 0.25 : 0.06) : 0;
   const mw = p.per === 'money' ? 1.25 : 1;
   return Math.pow(money, mw) * (1 + 0.18 * strength + 0.10 * pop + 0.06 * town + home + former + (p.per === 'star' ? 0.08 * pop : 0));
 }
@@ -212,9 +219,12 @@ function faSign(f, p, o) {
   f.done = true; f.to = o.tid;
   addToTeam(p, o.tid, 2);
   p.ren = { st: 'signed', sal: o.sal, yrs: o.yrs, faNew: true }; p.fa = null;
-  if (o.tid !== f.from) {
+  if (f.mlb) {
     p.faUsed = p.svc; p.mor = 70;
-    addNews('fa', `${p.name}が${tName(o.tid)}へFA移籍（${o.yrs}年・年${fmtSal(o.sal)}）`, { important: isUser(o.tid) || isUser(f.from), tid: o.tid });
+    addNews('mlb', `メジャー帰りの${p.name}が${tName(o.tid)}と契約（${o.yrs}年・年${fmtSal(o.sal)}）${o.tid === f.prev ? '。古巣に復帰' : ''}`, { important: isUser(o.tid) || isUser(f.prev), tid: o.tid, note: isUser(o.tid) || isUser(f.prev) ? 'hi' : false, pid: p.id });
+  } else if (o.tid !== f.from) {
+    p.faUsed = p.svc; p.mor = 70;
+    addNews('fa', `${p.name}が${tName(o.tid)}へFA移籍（${o.yrs}年・年${fmtSal(o.sal)}）`, { important: isUser(o.tid) || isUser(f.from), tid: o.tid, note: isUser(o.tid) || isUser(f.from) ? 'hi' : false, pid: p.id });
     faCompensation(f, o.tid);
   } else {
     addNews('fa', `${p.name}が${tName(o.tid)}に宣言残留（${o.yrs}年・年${fmtSal(o.sal)}）`, { important: isUser(o.tid), tid: o.tid });
@@ -223,10 +233,16 @@ function faSign(f, p, o) {
 function faNoOffer(f, p) {
   f.done = true;
   if (p.age >= 35 && chance(0.6)) { retirePlayer(p); return; }
+  if (f.from < 0) {
+    p.fa = { kind: 'free', from: f.prev != null ? f.prev : -1, ask: roundSal(Math.max(MIN_SAL, f.ask * 0.6)), y: G.year };
+    if (!G.fapool.includes(p.id)) G.fapool.push(p.id);
+    addNews('mlb', `メジャー帰りの${p.name}は獲得球団が現れず、自由契約のまま移籍先を探します`, { tid: f.prev != null ? f.prev : -1 });
+    return;
+  }
   f.to = f.from;
   addToTeam(p, f.from, 2);
   p.ren = { st: 'signed', sal: roundSal(Math.max(MIN_SAL, Math.min(f.ask * 0.8, f.prevSal))), yrs: 1 }; p.fa = null; p.mor = clamp(p.mor - 10, 0, 100);
-  addNews('fa', `${p.name}は獲得球団が現れず${tName(f.from)}に残留`, { tid: f.from });
+  addNews('fa', `${p.name}は獲得球団が現れず${tName(f.from)}に残留`, { tid: f.from, note: isUser(f.from), pid: p.id });
 }
 function unprotected(tid) {
   const ps = shihai(tid).filter(p => !p.frn && !(p.join > G.year) && !(p.ren && p.ren.faNew));
@@ -240,7 +256,7 @@ function payComp(fromTid, toTid, money) {
 function moveComp(p, toTid) {
   const from = p.team;
   addToTeam(p, toTid, 2);
-  addNews('fa', `人的補償で${p.name}が${tName(from)}から${tName(toTid)}へ移籍`, { important: isUser(from) || isUser(toTid), tid: toTid });
+  addNews('fa', `人的補償で${p.name}が${tName(from)}から${tName(toTid)}へ移籍`, { important: isUser(from) || isUser(toTid), tid: toTid, note: isUser(from) ? 'hi' : false, pid: p.id });
 }
 function faCompensation(f, toTid) {
   if (f.rank === 'C') return;
@@ -268,6 +284,7 @@ function evalTrade(tid, give, get, cash) {
   const ut = G.user.tid;
   if (!tradeOpen()) return { ok: false, why: 'トレード期間外です（7月末で締切、11月に再開）' };
   if (!give.length && !get.length) return { ok: false, why: '選手を選んでください' };
+  if (give.concat(get).some(mlbTrying)) return { ok: false, why: 'メジャー球団と交渉中の選手はトレードできません' };
   const vin = sum(give, p => pVal(p, tid)), vout = sum(get, p => pVal(p, tid));
   const maxOut = get.length ? Math.max(...get.map(p => pVal(p, tid))) : 0;
   const maxIn = give.length ? Math.max(...give.map(p => pVal(p, tid))) : 0;
@@ -289,7 +306,7 @@ function doTrade(tid, give, get, cash) {
   for (const p of get) { const lv = p.lv === 3 ? 3 : 2; addToTeam(p, ut, lv); p.mor = clamp(p.mor + 3, 0, 100); }
   if (cash > 0) book('exp', 'transfer', cash); else if (cash < 0) book('rev', 'transfer', -cash);
   const s = `${tName(tid)}とトレード成立：${give.map(p => p.name).join('・') || '金銭'} ⇄ ${get.map(p => p.name).join('・') || '金銭'}`;
-  addNews('trade', s, { important: true, tid: ut });
+  addNews('trade', s, { important: true, tid: ut, note: false });
   G.trades.unshift({ y: G.year, m: G.month, tid, give: give.map(p => p.name), get: get.map(p => p.name), cash });
   touch();
 }
@@ -324,29 +341,28 @@ function signForeign(id, tid) {
   const off = curTurn() >= 40;
   if (off) { p.sal = 0; p.ren = { st: 'signed', sal: p.fa.ask, yrs: p.fa.yrs }; p.join = G.year + 1; } else { p.sal = p.fa.ask; p.yrs = p.fa.yrs; p.join = G.year; }
   p.adapt = p.adaptT; p.prFrom = p.pr.school; delete p.pr; p.fa = null; p.mor = 65;
-  if (isUser(tid)) addNews('contract', `新外国人${p.name}（${POS_JP[p.pos]}・${p.prFrom}）と年俸${fmtSal(p.sal || p.ren.sal)}で契約`, { important: true, tid });
+  if (isUser(tid)) addNews('contract', `新外国人${p.name}（${POS_JP[p.pos]}・${p.prFrom}）と年俸${fmtSal(p.sal || p.ren.sal)}で契約`, { important: true, tid, note: false });
   touch();
   return { ok: true };
 }
 
-/* ---------- ポスティング・海外移籍 ---------- */
-function postingFee(p) { return roundSal(clamp(valueSalary(ovr(p)) * 4 * rf(0.8, 1.2), 20000, 300000)); }
-function leaveToMLB(p, how, fee) {
-  const from = p.team;
-  if (fee && isUser(from)) book('rev', 'transfer', fee);
-  G.mlb.push({ name: p.name, from, y: G.year, how, ovr: ovr(p) });
-  addNews('fa', `${tShort(from)}の${p.name}が${how}でメジャーへ${fee ? '（譲渡金' + fmtOku(fee) + '）' : ''}`, { important: isUser(from) || ovr(p) >= 78, tid: from });
-  removeFromTeam(p);
-  delete G.players[p.id];
-}
+/* ---------- ポスティングの希望（11月） ---------- */
 function postingRequests() {
   for (const T of G.teams) for (const p of shihai(T.id)) {
-    if (p.per !== 'mlb' || ovr(p) < 72 || p.age > 31 || p.svc < 4 || p.svc >= 9 || p.postY === G.year) continue;
-    if (!chance(0.5)) continue;
+    if (p.frn || p.lv === 3 || p.svc >= kfaNeed(p) || p.postY === G.year || mlbTrying(p)) continue;
+    const o = ovr(p);
+    const want = p.per === 'mlb' ? (o >= 70 && p.age <= 31 && p.svc >= 4 ? 0.5 : 0) : (o >= 80 && p.age <= 29 && p.svc >= 6 ? 0.12 : 0);
+    if (!want || !chance(want)) continue;
     p.postY = G.year;
-    if (isUser(T.id)) queueEvent('posting', { pid: p.id, fee: postingFee(p) });
-    else if (chance(0.35)) leaveToMLB(p, 'ポスティング', 0);
+    if (isUser(T.id)) queueEvent('posting', { pid: p.id, fee: postingFeeEst(p), lab: interestLabel(mlbInterest(p)) });
+    else if (chance(0.55)) startMLB(p, 'post');
   }
+}
+/* 海外FA権を行使した自球団の選手：残留を説得するための条件 */
+function kfaOffer(p) {
+  const yrs = p.age <= 30 ? 4 : 3; const sal = roundSal(Math.max(p.sal * 1.2, calcDemand(p) * 1.3));
+  const okP = clamp((p.per === 'mlb' ? 0.15 : p.per === 'loyal' ? 0.5 : 0.32) + (p.mor - 50) / 250, 0.05, 0.8);
+  return { pid: p.id, yrs, sal, okP, lab: interestLabel(mlbInterest(p)) };
 }
 
 /* ---------- 引退 ---------- */
@@ -375,7 +391,7 @@ function retirePlayer(p) {
     const role = isP(p) ? 'pit' : pick(['bat', 'fld', 'bat', 'head']);
     G.retiredCoaches.push({ role: legend && chance(0.4) ? 'mgr' : role, name: p.name, q: clamp(Math.round(48 + (legend ? 12 : 0) + rn(0, 8)), 35, 88), age: p.age + 1, pid: p.id });
   }
-  if (isUser(from)) addNews('retire', `${p.name}（${p.age}歳）が現役引退を表明${legend ? '。球団の歴史に名を刻んだ名選手です' : ''}`, { important: legend || p.pop >= 50, tid: from });
+  if (isUser(from)) addNews('retire', `${p.name}（${p.age}歳）が現役引退を表明${legend ? '。球団の歴史に名を刻んだ名選手です' : ''}`, { important: legend || p.pop >= 50, tid: from, note: legend ? 'hi' : false });
   else if (legend) addNews('retire', `${tShort(from >= 0 ? from : p.orig)}の名選手${p.name}が引退`, {});
   if (from >= 0) removeFromTeam(p);
   G.fapool = G.fapool.filter(x => x !== p.id);
@@ -385,5 +401,7 @@ function processRetirements() {
   const all = [];
   for (const T of G.teams) all.push(...roster(T.id));
   for (const id of G.fapool) { const p = P_(id); if (p) all.push(p); }
-  for (const p of all) if (chance(retireChance(p))) retirePlayer(p);
+  const mine = [];
+  for (const p of all) if (chance(retireChance(p))) { if (p.team >= 0 && isUser(p.team)) mine.push(p.name); retirePlayer(p); }
+  if (mine.length) notify('retire', `今オフは自球団の${mine.length}人が現役を引退します：${mine.slice(0, 6).join('、')}${mine.length > 6 ? 'ほか' : ''}`, { go: 'news' });
 }

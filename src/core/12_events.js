@@ -1,12 +1,18 @@
 /* =========================================================
    ニュースとイベント（選択肢つきの出来事）
    ========================================================= */
+/* o.note：お知らせ（ベル）にも出すか。true＝ふつう、'hi'＝大事、false＝出さない。
+   指定がなければ「自球団の重要なニュース」だけを出す */
 function addNews(type, text, o) {
   o = o || {};
-  G.news.unshift({ y: G.year, m: G.month, w: G.week, type, t: text, imp: !!o.important, tid: o.tid === undefined ? -1 : o.tid });
+  const n = { y: G.year, m: G.month, w: G.week, type, t: text, imp: !!o.important, tid: o.tid === undefined ? -1 : o.tid };
+  G.news.unshift(n);
   if (G.news.length > 400) G.news.length = 400;
+  const ut = G.user ? G.user.tid : -2;
+  const nt = o.note !== undefined ? o.note : (o.important && n.tid === ut);
+  if (nt && G.user) { pushNote({ type, t: text, pr: nt === 'hi' || o.important ? 'hi' : 'lo', go: o.go || NOTE_GO[type] || '', tab: o.tab || '', pid: o.pid != null ? o.pid : null }); n.nt = 1; }
 }
-const NEWS_TYPES = { game: '試合', post: 'ポストシーズン', award: '表彰', injury: '故障', dev: '育成', camp: 'キャンプ', draft: 'ドラフト', fa: 'FA・移籍', trade: 'トレード',
+const NEWS_TYPES = { game: '試合', post: 'ポストシーズン', award: '表彰', injury: '故障', dev: '育成', camp: 'キャンプ', draft: 'ドラフト', fa: 'FA・移籍', mlb: 'メジャー', trade: 'トレード',
   contract: '契約', retire: '引退', biz: '経営', town: '街づくり', staff: 'スタッフ', owner: 'オーナー', event: '出来事', record: '記録', league: 'リーグ' };
 
 function userGameNews(res, g) {
@@ -140,9 +146,18 @@ const EVENTS = {
   },
   posting: {
     t: 'ポスティングでのメジャー挑戦を希望', w: 0, cond: () => false,
-    text: d => { const p = P_(d.pid); return `${p ? p.name : '主力選手'}がポスティング制度でのメジャー挑戦を希望しています。容認すれば譲渡金はおよそ${fmtOku(d.fee)}の見込みです。`; },
-    ch: [{ l: '容認する', d: '選手は退団し、譲渡金を得る', f: d => { const p = P_(d.pid); if (p && p.team === G.user.tid) { leaveToMLB(p, 'ポスティング', d.fee); return `${p.name}の挑戦を送り出しました。`; } return '対象選手がいませんでした。'; } },
+    text: d => { const p = P_(d.pid); return `${p ? p.name : '主力選手'}がポスティング制度でのメジャー挑戦を希望しています。メジャー球団の関心は「${d.lab || '―'}」。容認して獲得球団が現れれば、譲渡金（見込み約${fmtOku(d.fee)}）を受け取って送り出します。現れなければ残留です。`; },
+    ch: [{ l: '容認する', d: 'メジャー球団と交渉する（2〜4週間で結果）', f: d => { const p = P_(d.pid); if (p && p.team === G.user.tid && !mlbTrying(p)) { startMLB(p, 'post'); p.mor = clamp(p.mor + 8, 0, 100); return `${p.name}のポスティング申請を容認しました。`; } return '対象選手がいませんでした。'; } },
       { l: '認めない', d: '本人のやる気が大きく下がる', f: d => { const p = P_(d.pid); if (p) { p.mor = clamp(p.mor - 25, 0, 100); p.postRef = true; } return '残留を求めました。本人は落胆しています。'; } }]
+  },
+  kfa: {
+    t: '海外FA権の行使', w: 0, cond: () => false,
+    text: d => { const p = P_(d.pid); return `${p ? p.name : '主力選手'}が海外FA権を行使し、メジャー挑戦を表明しました。メジャー球団の関心は「${d.lab || '―'}」。大型契約を示して残留を説得することもできます（失敗すれば挑戦へ）。`; },
+    ch: [{ l: '残留を説得する', d: d => `${d.yrs}年・年${fmtSal(d.sal)}を提示（説得できる見込み ${Math.round(d.okP * 100)}%）`, f: d => {
+        const p = P_(d.pid); if (!p || p.team !== G.user.tid) return '対象選手がいませんでした。';
+        if (chance(d.okP)) { p.ren = { st: 'signed', sal: d.sal, yrs: d.yrs }; p.mor = clamp(p.mor + 5, 0, 100); addNews('contract', `${p.name}がメジャー挑戦を断念し、${d.yrs}年契約で残留`, { tid: G.user.tid, important: true, note: false, pid: p.id }); return `${p.name}は残留を決めました（${d.yrs}年・年${fmtSal(d.sal)}）。`; }
+        startMLB(p, 'kfa'); return `説得は実らず、${p.name}はメジャー球団との交渉に入りました。`; } },
+      { l: '送り出す', d: '挑戦を応援する（人気+1）', f: d => { const p = P_(d.pid); if (p && p.team === G.user.tid) { startMLB(p, 'kfa'); uT().pop = clamp(uT().pop + 1, 0, 99); return `${p.name}の挑戦を応援して送り出します。`; } return '対象選手がいませんでした。'; } }]
   },
   tradeOffer: {
     t: 'トレードの打診', w: 0, cond: () => false,

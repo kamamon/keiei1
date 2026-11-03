@@ -25,7 +25,8 @@ SCREENS.records = () => {
     ], L), { flush: true }) : '<div class="empty">通算WAR18以上、1200安打、200本塁打、100勝などの名選手が引退すると、ここに記録されます。</div>';
   } else {
     const M = G.mlb.slice().reverse();
-    body = M.length ? panel('', `<table class="t compact"><thead><tr><th>年</th><th>選手</th><th>元所属</th><th>経路</th></tr></thead><tbody>${M.map(x => `<tr><td>${x.y}</td><td>${esc(x.name)}</td><td>${tMark(x.from)}</td><td>${esc(x.how)}</td></tr>`).join('')}</tbody></table>`, { flush: true }) : '<div class="empty">まだメジャーへ渡った選手はいません。</div>';
+    const stL = x => x.st === 'play' ? '<span class="tag lamp">メジャーで活躍中</span>' : x.st === 'back' ? `<span class="tag b">${x.by || ''}年に日本へ復帰</span>` : x.st === 'ret' ? `<span class="tag">${x.ry || ''}年に引退</span>` : '';
+    body = M.length ? panel('', `<div class="tw"><table class="t compact"><thead><tr><th>年</th><th>選手</th><th>元所属</th><th>経路</th><th>移籍先</th><th>いま</th><th>最近の成績</th></tr></thead><tbody>${M.map(x => `<tr class="${isUser(x.from) ? 'me' : ''}"><td>${x.y}</td><td>${P_(x.pid) ? pLink(P_(x.pid)) : esc(x.name)}</td><td>${tMark(x.from)}</td><td>${esc(x.how)}${x.fee ? `<div class="small faint">譲渡金 ${fmtOku(x.fee)}</div>` : ''}</td><td class="small">${esc(x.club || '')}${x.yrs ? `（${x.yrs}年契約）` : ''}</td><td>${stL(x)}</td><td class="small">${esc(x.last || '')}</td></tr>`).join('')}</tbody></table></div>`, { flush: true }) : '<div class="empty">まだメジャーへ渡った選手はいません。海外FA権（1軍で9年）やポスティングで挑戦します。</div>';
   }
   return `<h1 class="h1">球団史・記録</h1>${tb}${body}`;
 };
@@ -53,7 +54,12 @@ SCREENS.system = () => {
       <div class="stack" style="margin-top:12px"><label class="chk"><input type="checkbox" data-c="setUser" data-k="showWeekly" ${G.user.showWeekly ? 'checked' : ''}>毎週のまとめを表示する</label>
       <label class="chk"><input type="checkbox" data-c="setUser" data-k="autoSwap" ${G.user.autoSwap ? 'checked' : ''}>1軍の故障者を自動で入れ替える</label>
       <label class="chk"><input type="checkbox" data-c="setUser" data-k="autoRoster" ${G.user.autoRoster ? 'checked' : ''}>1軍の編成を毎週監督に任せる</label></div>`)}
-    ${panel('遊び方', `<button class="btn" data-a="help">遊び方を読む</button> <button class="btn danger" data-a="toTitleAsk">タイトルに戻る</button><p class="small faint" style="margin-top:10px">球団社長 ver.1.0　登場する球団・企業・人物はすべて架空です。</p>`)}
+    ${panel('お知らせ（通知）', `<div class="stack"><label class="chk"><input type="checkbox" data-c="setUser" data-k="noteToast" ${G.user.noteToast ? 'checked' : ''}>週を進めたとき、お知らせを画面の下にも出す（週のまとめを出さないとき）</label>
+      <label class="chk"><input type="checkbox" data-c="setUser" data-k="noteStop" ${G.user.noteStop ? 'checked' : ''}>まとめて進めているとき、大事なお知らせ（工事の完了・長い故障・FA・メジャー挑戦の結果など）で止まる</label>
+      <label class="chk"><input type="checkbox" data-c="osNote" ${G.user.osNote ? 'checked' : ''}>ブラウザの通知も使う（ほかのタブを見ているときに、大事なお知らせを知らせる）</label>
+      <div class="row small"><span class="muted">ブラウザの通知：${esc(osNoteState())}</span><button class="btn xs" data-a="noteTest">テスト</button></div></div>
+      <p class="small muted" style="margin:10px 0 0">工事・練習・契約・選手の成長や故障など、自球団に何かが完了したり変わったりすると、右上のベルに届きます。</p>`)}
+    ${panel('遊び方', `<button class="btn" data-a="help">遊び方を読む</button> <button class="btn danger" data-a="toTitleAsk">タイトルに戻る</button><p class="small faint" style="margin-top:10px">球団社長 ver.1.1　登場する球団・企業・人物はすべて架空です。${G.flags.edited ? '　この球団のデータは選手の編集を使っています。' : ''}</p>`)}
   </div>`;
 };
 ACT.sysSave = async el => { const ok = await saveTo(el.dataset.s); toast(ok ? '保存しました' : '保存できませんでした（容量不足の可能性）', ok ? 'good' : 'bad'); render(); };
@@ -86,6 +92,12 @@ MODALS.help = () => ({
     <li>街づくりで駐車場・バス・新駅をつくるとアクセスが上がり、モールやホテルは賃料収入を生みます。</li>
     <li>赤字は親会社がある程度補填してくれますが、オーナーの評価は下がります。</li></ul>
     <h4>チームづくりのコツ</h4><ul class="small"><li>若手は2軍・育成でも成長しますが、1軍で試合に出ると伸びが早くなります。</li><li>スカウトを地域に送り込むと隠れた好素材が見つかります。</li>
-    <li>主力のFA流出を防ぐには、FA権を得る前に複数年契約を。</li><li>外国人は当たり外れが大きいので、海外担当スカウトで調査を。</li></ul>
+    <li>主力のFA流出を防ぐには、FA権を得る前に複数年契約を。</li><li>外国人は当たり外れが大きいので、海外担当スカウトで調査を。</li>
+    <li>サブポジション（△こなせる・○上手・◎本職並み）があると、本職以外の守備にも就けます。公式戦で守るか、「特別練習」で覚えます。</li>
+    <li>特殊能力（チャンス・盗塁・ノビなどのA〜G、パワーヒッター・奪三振などのプラス、三振・四球などのマイナス）は、試合のその場面で効きます。金の能力はスターの証です。</li>
+    <li>数年に一度、「10年に一度の逸材」がドラフト候補に現れます。1位入札は競合必至です。</li>
+    <li>海外FA権は1軍9年で得ます。11月〜12月第2週は、選手詳細からポスティングにかけられます。メジャーから戻った選手はFA市場に出ます。</li></ul>
+    <h4>お知らせと編集</h4><ul class="small"><li>右上のベルに、工事の完了・選手の成長や故障・契約の変化など、自球団のお知らせが届きます。設定でブラウザの通知も使えます。</li>
+    <li>「選手の編集」では、名前・背番号・能力・特殊能力・サブポジションなどを自由に変えたり、新しい選手を作ったりできます。</li></ul>
   </div></div>`, foot: '<button class="btn pri" data-a="closeModal">閉じる</button>'
 });

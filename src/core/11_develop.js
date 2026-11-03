@@ -56,7 +56,7 @@ function growPlayer(p, ctx) {
     else if (p.lv === 3) playF = 0.92;
   }
   const season = ctx.season || 1;
-  const base = 0.15 * (ctx.mult || 1) * per * morF * playF * season * (p.injW > 0 ? 0.3 : 1);
+  const base = 0.15 * (ctx.mult || 1) * per * morF * playF * season * (p.injW > 0 ? 0.3 : 1) * (p.gen ? 1.15 : 1) * (p.prac ? 0.94 : 1);
   const lvF = ctx.team == null ? 1 : p.lv === 1 ? 1 : p.lv === 2 ? (ctx.cFarm || 1) * (ctx.fFarm || 1) : (ctx.cIk || 1) * (ctx.fFarm || 1);
   const dorm = age <= 23 ? (ctx.fDorm || 1) : 1;
   let gain = 0;
@@ -88,21 +88,33 @@ function growPlayer(p, ctx) {
   }
   p.grow = (p.grow || 0) + gain;
 }
+const GRADE_ORDER = 'GFEDCBAS';
 function weeklyDevelopment() {
   for (const T of G.teams) {
     const ctx = growCtx(T.id);
     for (const p of roster(T.id)) {
       growPlayer(p, ctx);
-      if (p.age <= 27 && chance(0.0005) && potv(p) - ovr(p) >= 8) breakout(p);
+      if (p.age <= 27 && chance(p.gen ? 0.0015 : 0.0005) && potv(p) - ovr(p) >= 8) breakout(p);
       if (p.adapt && curTurn() >= SEASON_START) p.adapt = p.adapt > 0 ? Math.max(0, p.adapt - 0.05) : Math.min(0, p.adapt + 0.18);
     }
+  }
+  weeklyPractice();
+  gradeUpNotes();
+}
+/* 自球団の選手の総合評価が上の段階（C以上）に上がったら知らせる */
+function gradeUpNotes() {
+  let n = 0;
+  for (const p of roster(G.user.tid)) {
+    const g = grade(ovr(p));
+    if (p.og && GRADE_ORDER.indexOf(g) > GRADE_ORDER.indexOf(p.og) && GRADE_ORDER.indexOf(g) >= 4 && n < 3) { n++; notify('dev', `${p.name}の総合力が${p.og}から${g}に上がりました（${ovr(p)}）`, { pid: p.id, go: 'training' }); }
+    p.og = g;
   }
 }
 function breakout(p) {
   const keys = shuffle((isP(p) ? PIT_KEYS : BAT_KEYS).slice()).slice(0, 3);
   for (const k of keys) { const inc = k === 'vel' ? rf(1.5, 3.5) : rf(3, 6); p.cap[k] = Math.min(k === 'vel' ? 166 : 99, p.cap[k] + inc * 0.35); p.a[k] = Math.min(p.cap[k], p.a[k] + inc); }
   p.mor = clamp(p.mor + 10, 0, 100);
-  if (isUser(p.team)) addNews('dev', `${p.name}が覚醒！ ${keys.map(k => ATTR_JP[k]).join('・')}が大きく伸びました`, { important: true, tid: p.team });
+  if (isUser(p.team)) addNews('dev', `${p.name}が覚醒！ ${keys.map(k => ATTR_JP[k]).join('・')}が大きく伸びました`, { important: true, tid: p.team, note: 'hi', pid: p.id });
 }
 
 /* ---------- 調子とやる気 ---------- */
@@ -112,9 +124,10 @@ function weeklyMorale(weekRes) {
     const mg = teamMgr(T.id);
     const R = T.rec; const wp = (R.w + R.l) >= 8 ? pctOf(R) : 0.5;
     const hasLeader = rosterLv(T.id, 1).some(p => p.per === 'leader' && ovr(p) >= 60);
+    const moodB = clamp(sum(rosterLv(T.id, 1), p => skFx(p).mood) * 1.5, -4, 4);
     const dorm = isUser(T.id) ? G.tfac.dorm.lv : (T.facLv || 2) * 0.6;
     for (const p of roster(T.id)) {
-      let tg = 55 + (wp - 0.5) * (p.per === 'passion' ? 60 : 40) + ((mg.lead || 50) - 50) * 0.15 + (hasLeader ? 4 : 0);
+      let tg = 55 + (wp - 0.5) * (p.per === 'passion' ? 60 : 40) + ((mg.lead || 50) - 50) * 0.15 + (hasLeader ? 4 : 0) + moodB;
       if (season) {
         if (p.lv === 1 && p.wkG >= 3) tg += 8;
         else if (p.lv !== 1 && p.age >= 28 && ovr(p) >= 60) tg -= 10;
@@ -125,7 +138,7 @@ function weeklyMorale(weekRes) {
       const sp = p.per === 'mypace' ? 0.07 : p.per === 'shy' ? 0.25 : 0.14;
       p.mor = clamp(p.mor + (tg - p.mor) * sp + rn(0, 1.5), 5, 100);
       // 調子
-      const vol = p.per === 'genius' ? 0.18 : p.per === 'shy' ? 0.42 : 0.3;
+      const vol = (p.per === 'genius' ? 0.18 : p.per === 'shy' ? 0.42 : 0.3) * (skFx(p).swing ? 1.6 : 1);
       if (chance(vol)) p.form = clamp(p.form + (chance(0.5 + (p.mor - 50) / 200) ? 1 : -1), -2, 2);
       else if (p.form !== 0 && chance(0.25)) p.form += p.form > 0 ? -1 : 1;
       // 疲労（野手）
@@ -156,7 +169,7 @@ function injure(p, mult) {
   p.injW = w; p.injN = inj.n; p.form = Math.min(p.form, 0);
   if (inj.perm) { if (isP(p)) { p.a.vel = Math.max(120, p.a.vel - rf(1, 3)); p.cap.vel = Math.max(p.a.vel, p.cap.vel - 2); } else p.a.spd -= 3; }
   if (p.team >= 0) {
-    if (isUser(p.team) && p.lv === 1) addNews('injury', `${p.name}が${inj.n}で離脱（全治${w}週間）`, { important: w >= 4, tid: p.team });
+    if (isUser(p.team) && p.lv === 1) addNews('injury', `${p.name}が${inj.n}で離脱（全治${w}週間）`, { important: w >= 4, tid: p.team, note: w >= 4 ? 'hi' : true, pid: p.id });
     if (p.lv === 1) { if (isUser(p.team) && !G.user.autoSwap) { /* ユーザーに任せる */ } else swapInjured(p.team); }
     touch();
   }
@@ -174,7 +187,7 @@ function weeklyInjuries() {
       if (isUser(T.id)) rec += facMult('team', 'medical') * 0.08 + G.town.stat.heal + (coach('cond') - 50) * 0.004;
       else rec += (T.facLv || 2) * 0.05;
       p.injW = Math.max(0, p.injW - rec);
-      if (p.injW < 0.5) { p.injW = 0; p.injN = ''; if (isUser(T.id) && p.lv === 1) touch(); if (isUser(T.id)) p.recovered = G.year * 100 + t; }
+      if (p.injW < 0.5) { const nm = p.injN; p.injW = 0; p.injN = ''; if (isUser(T.id) && p.lv === 1) touch(); if (isUser(T.id)) { p.recovered = G.year * 100 + t; if (p.lv !== 3 || ovr(p) >= 50) notify('injury', `${p.name}が${nm ? nm + 'から' : '故障から'}復帰しました${p.lv === 1 ? '' : '（いまは2軍）'}`, { pid: p.id, go: 'roster' }); } }
     } else if (chance((camp ? 0.004 : 0.0018) * injMult(p))) injure(p, injMult(p));
   }
 }
@@ -193,7 +206,7 @@ function endCamp() {
   if (!G.camp) return;
   G.camp.done = true;
   const top = roster(G.user.tid).filter(p => p.grow > 0).sort((a, b) => b.grow - a.grow).slice(0, 3);
-  addNews('camp', `春季キャンプ打ち上げ。${top.map(p => p.name).join('、')}らが成長をアピール`, { tid: G.user.tid });
+  addNews('camp', `春季キャンプ打ち上げ。${top.map(p => p.name).join('、')}らが成長をアピール`, { tid: G.user.tid, note: true });
 }
 function winterLeague() {
   const W = G.winter || []; if (!W.length) return;
@@ -203,11 +216,12 @@ function winterLeague() {
     for (const k of keys) { const inc = (k === 'vel' ? 0.8 : 2.5) * rf(0.6, 1.4); p.a[k] = Math.min(p.cap[k], p.a[k] + inc); }
     if (chance(0.12)) breakout(p);
   }
-  addNews('dev', `ウィンターリーグに派遣した${W.length}人が実戦経験を積んで帰国`, { tid: G.user.tid });
+  addNews('dev', `ウィンターリーグに派遣した${W.length}人が実戦経験を積んで帰国`, { tid: G.user.tid, note: true, go: 'training' });
   G.winter = [];
 }
 function newYearAging() {
   for (const id in G.players) { const p = G.players[id]; p.age++; p.grow = 0; }
+  for (const m of G.mlbAway || []) { m.p.age++; m.p.grow = 0; }
 }
 
 /* リーグ全体の水準を保つ（能力インフレ・デフレの自動補正） */
