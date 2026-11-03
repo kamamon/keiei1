@@ -22,6 +22,7 @@ function calcDemand(p) {
   let d = prev + (t - prev) * (t >= prev ? 0.7 : 0.45);
   d = clamp(d, prev * (prev >= 10000 ? 0.6 : 0.75), prev * 2.5 + 1000);
   d *= PERS[p.per].demand || 1;
+  if (p.titleRew === G.year) d *= 1.05;
   if (p.mor < 35) d *= 1.05;
   return roundSal(Math.max(d, minSal(p)));
 }
@@ -386,7 +387,15 @@ function isLegend(p, c) { return careerWar(p) >= 18 || (isP(p) ? (c.w >= 100 || 
 function retirePlayer(p) {
   const from = p.team;
   const c = careerOf(p); const legend = isLegend(p, c);
-  if (legend) G.legends.push({ name: p.name, pos: p.pos, team: from >= 0 ? from : p.orig, orig: p.orig, y: G.year, yrs: p.hist.length + 1, c, war: careerWar(p), awards: (p.awards || []).length });
+  if (legend) {
+    const L = { name: p.name, pos: p.pos, team: from >= 0 ? from : p.orig, orig: p.orig, y: G.year, yrs: p.hist.length + 1, c, war: careerWar(p), awards: (p.awards || []).length,
+      pid: p.id, num: from >= 0 ? p.num : -1, titles: (p.awards || []).filter(a => TITLE_NAMES.includes(a.n)).length, feats: (p.feats || []).length, ms: Object.keys(p.ms || {}) };
+    G.legends.push(L);
+    if (from >= 0 && L.num >= 0 && L.num < 100 && !isRetiredNum(from, L.num)) {
+      if (isUser(from)) queueEvent('retnum', { pid: p.id, num: L.num, name: p.name, pos: p.pos });
+      else if (L.war >= 30 && chance(0.5)) retireNumber(from, { num: L.num, name: p.name, pid: p.id, pos: p.pos });
+    }
+  }
   if (p.pop >= 45 || legend) {
     const role = isP(p) ? 'pit' : pick(['bat', 'fld', 'bat', 'head']);
     G.retiredCoaches.push({ role: legend && chance(0.4) ? 'mgr' : role, name: p.name, q: clamp(Math.round(48 + (legend ? 12 : 0) + rn(0, 8)), 35, 88), age: p.age + 1, pid: p.id });
@@ -402,6 +411,6 @@ function processRetirements() {
   for (const T of G.teams) all.push(...roster(T.id));
   for (const id of G.fapool) { const p = P_(id); if (p) all.push(p); }
   const mine = [];
-  for (const p of all) if (chance(retireChance(p))) { if (p.team >= 0 && isUser(p.team)) mine.push(p.name); retirePlayer(p); }
+  for (const p of all) if (p.retAnn === G.year || chance(retireChance(p))) { if (p.team >= 0 && isUser(p.team)) mine.push(p.name); retirePlayer(p); }
   if (mine.length) notify('retire', `今オフは自球団の${mine.length}人が現役を引退します：${mine.slice(0, 6).join('、')}${mine.length > 6 ? 'ほか' : ''}`, { go: 'news' });
 }

@@ -3,14 +3,18 @@
    ========================================================= */
 SCREENS.records = () => {
   const tab = getTab('records', 'mine');
-  const tb = tabs('records', [['mine', '球団の歩み'], ['league', '歴代の優勝'], ['legends', '名選手'], ['mlb', 'メジャー移籍']], tab);
+  const tb = tabs('records', [['mine', '球団の歩み'], ['recs', '記録'], ['feats', '偉業'], ['hof', '野球殿堂'], ['retnum', '永久欠番'], ['league', '歴代の優勝'], ['legends', '名選手'], ['mlb', 'メジャー移籍']], tab);
   let body = '';
   if (tab === 'mine') {
     const H = G.hist.user; const F = G.fin.hist;
     body = H.length ? panel('', `<div class="tw"><table class="t"><thead><tr><th>年</th><th>順位</th><th>勝敗</th><th>ポストシーズン</th><th class="num">観客動員</th><th class="num">収支</th><th class="num">オーナー信頼</th></tr></thead><tbody>${H.slice().reverse().map(h => `<tr><td>${h.y}</td><td>${h.rank}位</td><td>${h.w}勝${h.l}敗${h.d ? h.d + '分' : ''}</td><td>${h.champ ? '<span class="tag lamp">日本一</span>' : h.lg ? '<span class="tag b">リーグ優勝</span>' : ''}</td><td class="num">${fmtPeople(h.att)}</td><td class="num ${h.net < 0 ? 'neg' : 'pos'}">${fmtSigned(h.net)}</td><td class="num">${Math.round(h.trust)}</td></tr>`).join('')}</tbody></table></div>`, { flush: true }) +
       (F.length > 1 ? '<div style="height:16px"></div>' + panel('観客動員と収支の推移', lineChart([{ n: '観客動員（万人）', c: 'var(--team)', v: F.map(h => h.att / 10000) }, { n: '収支（億円）', c: 'var(--lamp)', v: F.map(h => h.net / 10000) }], F.map(h => String(h.y)), { fmt: v => trimNum(v.toFixed(1)), label: '推移' })) : '')
       : '<div class="empty">1年目のシーズンが終わると、ここに球団の歩みが記録されます。</div>';
-  } else if (tab === 'league') {
+  } else if (tab === 'recs') body = recordsTab();
+  else if (tab === 'feats') body = featsTab();
+  else if (tab === 'hof') body = hofTab();
+  else if (tab === 'retnum') body = retnumTab();
+  else if (tab === 'league') {
     const S = G.hist.seasons.slice().reverse();
     const titles = G.teams.slice().sort((a, b) => (b.titles.gs * 10 + b.titles.lg) - (a.titles.gs * 10 + a.titles.lg));
     body = `<div class="grid g2">${panel('歴代の優勝', S.length ? `<table class="t compact"><thead><tr><th>年</th><th>${LEAGUES[0]}</th><th>${LEAGUES[1]}</th><th>日本一</th></tr></thead><tbody>${S.map(s => `<tr><td>${s.y}</td><td>${s.lgChamp ? tMark(s.lgChamp[0]) : '―'}</td><td>${s.lgChamp ? tMark(s.lgChamp[1]) : '―'}</td><td>${s.champ != null ? tMark(s.champ) : '―'}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">まだ記録がありません</div>', { flush: true })}
@@ -29,6 +33,60 @@ SCREENS.records = () => {
     body = M.length ? panel('', `<div class="tw"><table class="t compact"><thead><tr><th>年</th><th>選手</th><th>元所属</th><th>経路</th><th>移籍先</th><th>いま</th><th>最近の成績</th></tr></thead><tbody>${M.map(x => `<tr class="${isUser(x.from) ? 'me' : ''}"><td>${x.y}</td><td>${P_(x.pid) ? pLink(P_(x.pid)) : esc(x.name)}</td><td>${tMark(x.from)}</td><td>${esc(x.how)}${x.fee ? `<div class="small faint">譲渡金 ${fmtOku(x.fee)}</div>` : ''}</td><td class="small">${esc(x.club || '')}${x.yrs ? `（${x.yrs}年契約）` : ''}</td><td>${stL(x)}</td><td class="small">${esc(x.last || '')}</td></tr>`).join('')}</tbody></table></div>`, { flush: true }) : '<div class="empty">まだメジャーへ渡った選手はいません。海外FA権（1軍で9年）やポスティングで挑戦します。</div>';
   }
   return `<h1 class="h1">球団史・記録</h1>${tb}${body}`;
+};
+
+/* ---------- 記録・偉業・殿堂・永久欠番 ---------- */
+function recWho(r) { if (!r) return ''; const p = r.pid != null ? P_(r.pid) : null; return (p ? pLink(p) : esc(r.name)) + (r.y === G.year && !r.seed ? ' <span class="tag lamp">今季</span>' : ''); }
+function recRow(k, r, car, extra) {
+  const d = car ? CAR_DEFS[k] : REC_DEFS[k]; const p = r && r.pid != null ? P_(r.pid) : null;
+  return `<tr class="${p && isUser(p.team) ? 'me' : ''}"><td>${d.n}</td><td class="num"><b>${r ? recFmt(k, r.v, car) : '―'}</b></td><td>${recWho(r)}</td><td>${r ? tMark(r.tid) : ''}</td><td class="num">${r ? r.y : ''}</td>${extra != null ? `<td class="small">${extra}</td>` : ''}</tr>`;
+}
+function activeTop(k) {
+  let best = null, bv = 0;
+  for (const T of G.teams) for (const p of roster(T.id)) { if ((!!CAR_DEFS[k].bat) === isP(p)) continue; const v = (p.car[k] || 0) + (p.st[k] || 0); if (v > bv) { bv = v; best = p; } }
+  return best ? `${pLink(best)} ${recFmt(k, bv, true)}` : '';
+}
+function recordsTab() {
+  const R = G.recs; if (!R) return '<div class="empty">記録はまだありません。</div>';
+  const tid = UI.tab.recTeam != null ? +UI.tab.recTeam : G.user.tid;
+  const head = '<thead><tr><th>記録</th><th class="num">数字</th><th>選手</th><th>球団</th><th class="num">年</th></tr></thead>';
+  const lg = panel('リーグ記録（シーズン）', `<div class="tw"><table class="t compact">${head}<tbody>${Object.keys(REC_DEFS).map(k => recRow(k, R.lg[k])).join('')}</tbody></table></div>`, { flush: true });
+  const car = panel('歴代最多（通算）', `<div class="tw"><table class="t compact"><thead><tr><th>記録</th><th class="num">数字</th><th>選手</th><th>球団</th><th class="num">年</th><th>現役トップ</th></tr></thead><tbody>${Object.keys(CAR_DEFS).map(k => recRow(k, R.car[k], true, activeTop(k))).join('')}</tbody></table></div>`, { flush: true });
+  const tm = panel('球団記録（シーズン）', `<div class="tw"><table class="t compact">${head}<tbody>${Object.keys(REC_DEFS).map(k => recRow(k, (R.tm[tid] || {})[k])).join('')}</tbody></table></div>`,
+    { flush: true, act: `<select class="inp" data-c="recTeam" aria-label="球団">${G.teams.map(t => opt(t.id, tName(t.id), tid)).join('')}</select>` });
+  return `<p class="small muted">シーズン中に記録を塗り替えると、その場でお知らせと演出があります。記録が近づくと「あと○本」のお知らせが届き、観客も増えます。打率と防御率は規定打席・規定投球回に届いた選手だけで、シーズン終了時に決まります。</p><div class="grid g2">${lg}${tm}</div><div style="height:16px"></div>${car}`;
+}
+ACT.recTeam = el => { UI.tab.recTeam = el.value; render(); };
+function featsTab() {
+  const F = (G.recs && G.recs.feats) || [];
+  return F.length ? panel('', `<div class="tw"><table class="t compact"><thead><tr><th>年月</th><th>偉業</th><th>選手</th><th>球団</th><th>相手</th></tr></thead><tbody>${F.map(f => { const p = P_(f.pid); return `<tr class="${isUser(f.tid) ? 'me' : ''}"><td class="small">${f.y}年${f.m}月</td><td><b>${esc(FEATS[f.k] ? FEATS[f.k].n : f.k)}</b>${f.v && (f.k === 'k15' || f.k === 'hr3' || f.k === 'h5') ? ` <span class="small muted">${f.v}${f.k === 'k15' ? '奪三振' : f.k === 'hr3' ? '本' : '安打'}</span>` : ''}</td><td>${p ? pLink(p) : esc(f.name)}</td><td>${tMark(f.tid)}</td><td>${tMark(f.opp)}</td></tr>`; }).join('')}</tbody></table></div>`, { flush: true })
+    : '<div class="empty">完全試合・ノーヒットノーラン・サイクルヒット・1試合3本塁打・1試合15奪三振などの偉業が、ここに記録されます。</div>';
+}
+function hofTab() {
+  const H = G.hof; if (!H) return '<div class="empty">野球殿堂はまだありません。</div>';
+  const ut = G.user.tid;
+  const cards = H.members.slice().reverse().map(m => `<article class="plaque${m.y === G.year ? ' new' : ''}${m.team === ut || m.orig === ut ? ' mine' : ''}"><div class="pl-y">${m.y}年 殿堂入り${m.y === G.year ? '<span class="pl-new">今年</span>' : ''}</div><h3 class="pl-n">${esc(m.name)}</h3>
+    <div class="pl-s">${m.pos === 'P' ? '投手' : POS_JP[m.pos] || ''}　${m.from}〜${m.to}年　${G.teams[m.team] ? esc(G.teams[m.team].nick) : ''}</div><div class="pl-l">${esc(m.line)}</div><div class="pl-f">得票率 ${m.pct}%${m.first ? '・資格1年目' : ''}${m.titles ? `・タイトル${m.titles}回` : ''}</div></article>`).join('');
+  const L = H.last; const ballot = H.ballot.slice().sort((a, b) => b.pct - a.pct);
+  const vote = panel(L ? `${L.y}年の投票` : '投票', `${L && L.res.length ? `<p>殿堂入り：<b>${L.res.map(x => `${esc(x.name)}（${x.pct}%）`).join('、')}</b></p>` : L ? '<p class="muted">今年の殿堂入りはありませんでした。</p>' : ''}
+    ${ballot.length ? `<div class="tw"><table class="t compact"><thead><tr><th>候補</th><th>元所属</th><th class="num">得票率</th><th class="num">候補年数</th></tr></thead><tbody>${ballot.map(b => `<tr class="${b.L.team === ut || b.L.orig === ut ? 'me' : ''}"><td>${esc(b.L.name)}</td><td>${tMark(b.L.team)}</td><td class="num">${b.pct}%</td><td class="num">${b.yrs}年</td></tr>`).join('')}</tbody></table></div>` : '<p class="small muted">いまは候補がいません。</p>'}
+    <p class="small muted">名選手として引退した選手が、引退から3年たつと候補になります。毎年1月の記者投票で75%以上を集めると殿堂入り。候補でいられるのは15年までです。通算WAR、大台の記録、タイトルと表彰、偉業が評価されます。</p>`);
+  return `<div class="grid g-hof"><div class="plaques">${cards}</div>${vote}</div>`;
+}
+function retnumTab() {
+  const ut = G.user.tid; const R = G.retNums || {};
+  const chip = r => `<div class="retnum"><b>${r.num}</b><span>${esc(r.name)}</span><span class="small faint">${r.seed ? '歴代' : r.y + '年'}</span></div>`;
+  const cands = retNumCands(ut);
+  const mine = panel(`${esc(tName(ut))}の永久欠番`, `${(R[ut] || []).length ? `<div class="retnums">${R[ut].map(chip).join('')}</div>` : '<p class="muted">まだ永久欠番はありません。</p>'}
+    ${cands.length ? `<h4 style="margin:14px 0 6px">永久欠番にできる名選手</h4><table class="t compact"><tbody>${cands.map(L => `<tr><td><b>${L.num}</b></td><td>${esc(L.name)}</td><td class="small muted">${L.y}年引退・通算WAR ${L.war}</td><td><button class="btn xs pri" data-a="retNumGo" data-key="${esc(legendKey(L))}">永久欠番にする</button></td></tr>`).join('')}</tbody></table>` : ''}
+    <p class="small muted" style="margin:10px 0 0">名選手が引退すると、背番号を永久欠番にするか聞かれます。永久欠番にした番号は、だれも着けられなくなります。</p>`);
+  const others = G.teams.filter(t => t.id !== ut).map(t => `<div class="ret-row"><span class="ret-t">${tMark(t.id)}</span><span class="ret-l">${(R[t.id] || []).map(r => `<span class="tag" title="${esc(r.name)}"><b>${r.num}</b>&nbsp;${esc(r.name)}</span>`).join(' ') || '<span class="faint small">なし</span>'}</span></div>`).join('');
+  return `<div class="grid g2">${mine}${panel('ほかの球団', `<div class="stack" style="gap:8px">${others}</div>`)}</div>`;
+}
+ACT.retNumGo = el => {
+  const L = G.legends.find(x => legendKey(x) === el.dataset.key); if (!L) return;
+  if (retireNumber(G.user.tid, { num: L.num, name: L.name, pid: L.pid, pos: L.pos }, true)) { toast(`背番号${L.num}を${L.name}の永久欠番にしました`, 'good'); const cq = G.celeQ.splice(0); for (const it of cq) openModal('cele2', it); }
+  render();
 };
 
 SCREENS.news = () => {
@@ -97,6 +155,10 @@ MODALS.help = () => ({
     <li>特殊能力（チャンス・盗塁・ノビなどのA〜G、パワーヒッター・奪三振などのプラス、三振・四球などのマイナス）は、試合のその場面で効きます。金の能力はスターの証です。</li>
     <li>数年に一度、「10年に一度の逸材」がドラフト候補に現れます。1位入札は競合必至です。</li>
     <li>海外FA権は1軍9年で得ます。11月〜12月第2週は、選手詳細からポスティングにかけられます。メジャーから戻った選手はFA市場に出ます。</li></ul>
+    <h4>記録と殿堂</h4><ul class="small"><li>シーズン・通算・球団の記録を塗り替えたり、ノーヒットノーラン・サイクルヒットなどの偉業や大台（2000安打・200勝など）を達成すると、演出と記念イベントがあります。記録が近づくと観客も増えます。</li>
+    <li>9月はタイトル争いのお知らせが届き、最終週には首位打者・最優秀防御率のために選手を休ませるかを決められます。</li>
+    <li>ベテランが引退を表明したら、最終週に引退試合を開けます。名選手が引退すると、背番号を永久欠番にできます。</li>
+    <li>名選手は引退から3年後に野球殿堂の候補になり、毎年1月の投票で75%以上を集めると殿堂入りします。「球団史・記録」で見られます。</li></ul>
     <h4>お知らせと編集</h4><ul class="small"><li>右上のベルに、工事の完了・選手の成長や故障・契約の変化など、自球団のお知らせが届きます。設定でブラウザの通知も使えます。</li>
     <li>「選手の編集」では、名前・背番号・能力・特殊能力・サブポジションなどを自由に変えたり、新しい選手を作ったりできます。</li></ul>
   </div></div>`, foot: '<button class="btn pri" data-a="closeModal">閉じる</button>'

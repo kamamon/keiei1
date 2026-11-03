@@ -25,23 +25,54 @@ function userGameNews(res, g) {
   else if (myHr.length) { const b = maxBy(myHr, h => h.n); const p = P_(b.id); if (p) t += `。${p.name}が${b.n === 4 ? '満塁弾' : b.n > 1 ? b.n + 'ラン' : 'ソロ'}（${b.no}号）`; }
   addNews('game', t, { tid: ut });
 }
-const MILESTONES = { hr: [100, 200, 300, 400, 500], h: [1000, 1500, 2000, 2500], w: [100, 150, 200], sv: [100, 200, 250, 300], so: [1000, 1500, 2000, 2500], hld: [100, 200, 300] };
+/* 通算記録の節目。大台（MS_BIG 以上）は演出と記念イベントつき */
+const MILESTONES = { hr: [100, 200, 300, 400, 500, 600], h: [1000, 1500, 2000, 2500, 3000], sb: [200, 300, 400], w: [100, 150, 200, 250], sv: [100, 200, 250, 300, 400], so: [1000, 1500, 2000, 2500, 3000], hld: [100, 200, 300] };
+const MS_BAT = { hr: 1, h: 1, sb: 1 };
+const MS_BIG = { hr: 400, h: 2000, sb: 400, w: 200, sv: 250, so: 2000, hld: 300 };
+const MS_NEAR = { hr: 3, h: 10, sb: 3, w: 1, sv: 3, so: 15, hld: 3 };
+const MS_NAME = { hr: '本塁打', h: '安打', sb: '盗塁', w: '勝', sv: 'セーブ', so: '奪三振', hld: 'ホールド' };
+const MS_UNIT = { hr: '本', h: '本', sb: '個', w: '勝', sv: '', so: '', hld: '' };
+function msLabel(key) { const k = key.replace(/[0-9]+$/, ''); const m = key.slice(k.length); return MS_NAME[k] ? '通算' + m + MS_NAME[k] : ''; }
+/* ゲーム開始前に越えていた節目は、達成済みにしておく */
+function markPastMilestones(p) { p.ms = p.ms || {}; for (const k in MILESTONES) for (const m of MILESTONES[k]) if ((p.car[k] || 0) >= m) p.ms[k + m] = p.ms[k + m] || 'pre'; }
 function milestoneCheck(res) {
   const ids = new Set(res.bp.concat(res.pp.map(x => x.id)));
   for (const id of ids) {
     const p = P_(id); if (!p) continue;
     for (const k in MILESTONES) {
-      if ((k === 'hr' || k === 'h') === isP(p)) continue;
+      if (!!MS_BAT[k] === isP(p)) continue;
       const tot = (p.car[k] || 0) + (p.st[k] || 0);
       for (const m of MILESTONES[k]) {
         const key = k + m;
-        if (tot >= m && !(p.ms && p.ms[key])) {
-          p.ms = p.ms || {}; p.ms[key] = 1; p.pop = clamp(p.pop + 3, 0, 100);
-          const nm = { hr: '通算' + m + '本塁打', h: '通算' + m + '安打', w: '通算' + m + '勝', sv: '通算' + m + 'セーブ', so: '通算' + m + '奪三振', hld: '通算' + m + 'ホールド' }[k];
-          addNews('record', `${tShort(p.team)}の${p.name}が${nm}を達成`, { important: isUser(p.team), tid: p.team });
-          if (isUser(p.team)) { uT().pop = clamp(uT().pop + 0.5, 0, 99); G.flags.goodsWeeks = 3; }
+        if (tot < m || (p.ms && p.ms[key])) continue;
+        p.ms = p.ms || {}; p.ms[key] = G.year;
+        const big = m >= MS_BIG[k]; const user = isUser(p.team); const nm = '通算' + m + MS_NAME[k];
+        p.pop = clamp(p.pop + (big ? 6 : 3), 0, 100);
+        addNews('record', `${tShort(p.team)}の${p.name}が${nm}を達成`, { important: user || big, tid: p.team, note: user ? (big ? 'hi' : true) : false, pid: p.id });
+        if (!user) continue;
+        uT().pop = clamp(uT().pop + (big ? 1.5 : 0.5), 0, 99);
+        goodsBuzz(big ? 3 : 2, big ? 0.3 : 0.12);
+        if (big) {
+          G.celeQ.push({ art: 'feat', kicker: '偉業達成', title: `${p.name}、${nm}`, sub: `${p.age}歳・プロ${Math.max(1, G.year - (p.join || G.year) + 1)}年目の大台`, body: 'チームメイトから花束が贈られ、スタンドからは大きな拍手。記念グッズを求めるファンが球場に集まっています。', pid: p.id });
+          queueEvent('msCele', { pid: p.id, name: p.name, label: nm });
         }
       }
+    }
+  }
+}
+/* 大台が近づいたら知らせる（自球団）。記録の瞬間を見ようと観客が増える */
+function msCountdown(p) {
+  const c = careerOf(p);
+  for (const k in MILESTONES) {
+    if (!!MS_BAT[k] === isP(p)) continue;
+    for (const m of MILESTONES[k]) {
+      if (m < MS_BIG[k] || (p.ms && p.ms[k + m])) continue;
+      const need = m - (c[k] || 0);
+      if (need > 0 && need <= MS_NEAR[k]) {
+        p.cd = p.cd || {}; const key = 'ms' + k + m;
+        if (!p.cd[key]) { p.cd[key] = 1; notify('record', `${p.name}、通算${m}${MS_NAME[k]}まであと${need}${MS_UNIT[k]}。大台の瞬間を見ようと注目が集まっています`, { pid: p.id, note: 'hi', go: 'roster' }); crowdBuzz(2, 0.08); }
+      }
+      break;
     }
   }
 }
@@ -159,6 +190,51 @@ const EVENTS = {
         startMLB(p, 'kfa'); return `説得は実らず、${p.name}はメジャー球団との交渉に入りました。`; } },
       { l: '送り出す', d: '挑戦を応援する（人気+1）', f: d => { const p = P_(d.pid); if (p && p.team === G.user.tid) { startMLB(p, 'kfa'); uT().pop = clamp(uT().pop + 1, 0, 99); return `${p.name}の挑戦を応援して送り出します。`; } return '対象選手がいませんでした。'; } }]
   },
+  msCele: {
+    t: '偉業達成の記念', w: 0, cond: () => false,
+    text: d => `${d.name}が${d.label}を達成しました。ファンへの感謝と記念をどう形にしますか。`,
+    ch: [{ l: '記念セレモニーを開く', d: '費用1,000万円・人気+1・2週間観客+6%・本人のやる気+5', f: d => { book('exp', 'promo', 1000); uT().pop = clamp(uT().pop + 1, 0, 99); crowdBuzz(2, 0.06); const p = P_(d.pid); if (p) p.mor = clamp(p.mor + 5, 0, 100); return '試合前のセレモニーで、記念のボードと花束が贈られました。'; } },
+      { l: '記念グッズを発売する', d: '費用1,500万円・4週間グッズ売上+35%', f: () => { book('exp', 'promo', 1500); goodsBuzz(4, 0.35); return '記念Tシャツと記念ボールが飛ぶように売れています。'; } },
+      { l: '記念品を贈る', d: '本人のやる気+10', f: d => { const p = P_(d.pid); if (p) p.mor = clamp(p.mor + 10, 0, 100); return '球団から記念の盾を贈りました。'; } }]
+  },
+  recCele: {
+    t: '新記録の記念', w: 0, cond: () => false,
+    text: d => `${d.name}が${d.label}を打ち立てました。歴史に残る記録をどう祝いますか。`,
+    ch: [{ l: '記録達成セレモニーと記念グッズ', d: '費用3,000万円・人気+2・3週間観客+10%・4週間グッズ+40%', f: () => { book('exp', 'promo', 3000); uT().pop = clamp(uT().pop + 2, 0, 99); crowdBuzz(3, 0.10); goodsBuzz(4, 0.4); return '記録の瞬間を記念したグッズとセレモニーで、球場は大いに盛り上がりました。'; } },
+      { l: '記念品を贈る', d: '本人のやる気+15', f: d => { const p = P_(d.pid); if (p) p.mor = clamp(p.mor + 15, 0, 100); return '球団から記念の盾を贈りました。'; } }]
+  },
+  featCele: {
+    t: '偉業の記念', w: 0, cond: () => false,
+    text: d => `${d.name}の${d.label}を記念して、何かしますか。`,
+    ch: [{ l: '記念グッズを発売する', d: '費用1,500万円・3週間グッズ売上+35%・人気+1', f: () => { book('exp', 'promo', 1500); goodsBuzz(3, 0.35); uT().pop = clamp(uT().pop + 1, 0, 99); return '記念のボールとフォトカードが完売しました。'; } },
+      { l: '本人をたたえる', d: '本人のやる気+10', f: d => { const p = P_(d.pid); if (p) p.mor = clamp(p.mor + 10, 0, 100); return '監督とチームメイトから祝福を受けました。'; } }]
+  },
+  titleCele: {
+    t: 'タイトル獲得の祝賀', w: 0, cond: () => false,
+    text: d => `今季、${d.text}がタイトルを獲得しました。どう祝いますか。`,
+    ch: [{ l: '祝勝会と記念グッズ', d: '費用2,000万円・人気+1・4週間グッズ売上+25%', f: () => { book('exp', 'promo', 2000); uT().pop = clamp(uT().pop + 1, 0, 99); goodsBuzz(4, 0.25); return '祝勝会は大盛況。記念グッズも好調です。'; } },
+      { l: '来季の年俸で報いると約束する', d: '本人たちのやる気+15・契約更改の希望額が少し上がる', f: d => { for (const id of d.pids || []) { const p = P_(id); if (p) { p.mor = clamp(p.mor + 15, 0, 100); p.titleRew = G.year; } } return '選手たちは来季への意欲を燃やしています。'; } },
+      { l: '特に何もしない', d: '変化なし', f: () => 'タイトルの表彰だけを見守りました。' }]
+  },
+  titleSit: {
+    t: 'タイトルのための欠場', w: 0, cond: () => false,
+    text: d => d.k === 'avg' ? `${d.name}が打率${fmtAvg(d.v)}で首位打者争いのトップに立っています（2位の${d.rival}は${fmtAvg(d.v2)}）。残りの試合を欠場させて打率を守りますか。` : `${d.name}が防御率${fmtEra(d.v)}で最優秀防御率争いのトップです（2位の${d.rival}は${fmtEra(d.v2)}）。残りの登板を回避させますか。`,
+    ch: [{ l: '欠場させてタイトルを守る', d: 'タイトルを取りやすくなる・ファンからは賛否で人気−0.5', f: d => { const p = P_(d.pid); if (p) { p.sit = G.year; touch(); } uT().pop = clamp(uT().pop - 0.5, 0, 99); return `${d.name}は残り試合を欠場します。`; } },
+      { l: '最後まで出場させる', d: '正々堂々と戦う・人気+0.5・本人のやる気+5', f: d => { const p = P_(d.pid); if (p) p.mor = clamp(p.mor + 5, 0, 100); uT().pop = clamp(uT().pop + 0.5, 0, 99); return `${d.name}は最後まで出場します。`; } }]
+  },
+  farewell: {
+    t: '引退試合', w: 0, cond: () => false,
+    text: d => `今季限りで引退する${d.name}${d.legend ? '（球団の歴史に名を刻んだ名選手）' : ''}の最後をどう送り出しますか。`,
+    ch: [{ l: '引退試合を開く', d: '最終週に出場・その週の観客+15%・試合後に人気+2とグッズ売上アップ', f: d => { const p = P_(d.pid); if (p) p.farewell = G.year; return `公式戦の最終週を${d.name}の引退試合にします。`; } },
+      { l: '引退セレモニーだけ行う', d: '人気+1', f: () => { uT().pop = clamp(uT().pop + 1, 0, 99); return '最終戦の後に引退セレモニーを行います。'; } },
+      { l: '特に何もしない', d: '変化なし', f: () => '静かに送り出します。' }]
+  },
+  retnum: {
+    t: '永久欠番', w: 0, cond: () => false,
+    text: d => `引退した${d.name}の背番号${d.num}を、永久欠番にしますか。永久欠番にすると、この番号は今後だれも着けられなくなります。`,
+    ch: [{ l: '永久欠番にする', d: '人気+2・ファン増', f: d => retireNumber(G.user.tid, { num: d.num, name: d.name, pid: d.pid, pos: d.pos }) ? `背番号${d.num}は${d.name}の永久欠番になりました。` : 'すでに永久欠番です。' },
+      { l: '見送る', d: 'あとで球団史から指定することもできる', f: () => '今回は見送りました。' }]
+  },
   tradeOffer: {
     t: 'トレードの打診', w: 0, cond: () => false,
     text: d => { const a = P_(d.want), b = P_(d.give); return `${tName(d.tid)}から、${a ? a.name : '?'}と${b ? b.name : '?'}（${b ? POS_JP[b.pos] + '・' + b.age + '歳・総合' + ovr(b) : ''}）の交換トレードを打診されています。`; },
@@ -189,6 +265,7 @@ function eventsWeekly() {
   // 2週間放置したイベントは無難な選択で自動処理
   for (let i = G.pending.length - 1; i >= 0; i--) if (G.pending[i].age >= 3) { const def = EVENTS[G.pending[i].id]; resolveEvent(i, def.ch.length - 1); }
   if (G.flags.goodsWeeks > 0) { G.flags.goodsWeeks--; if (G.flags.goodsWeeks === 0) G.flags.goodsBoost = 0; }
+  if (G.flags.buzzW > 0) { G.flags.buzzW--; if (G.flags.buzzW === 0) G.flags.buzz = 0; }
   maybeRandomEvent();
   maybeTradeOffer();
 }

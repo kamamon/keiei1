@@ -122,7 +122,7 @@ MODALS.player = ({ id }) => {
   const car = isP(p) ? `<td class="num">${c.g}</td><td class="num">${c.w}-${c.l}</td><td class="num">${c.sv}</td><td class="num">${c.hld}</td><td class="num">${fmtIP(c.outs)}</td><td class="num">${c.so}</td><td class="num">${fmtEra(pEra(c))}</td>` :
     `<td class="num">${c.g}</td><td class="num">${c.pa}</td><td class="num">${fmtAvg(bAvg(c))}</td><td class="num">${c.hr}</td><td class="num">${c.rbi}</td><td class="num">${c.sb}</td><td class="num">${bOps(c).toFixed(3)}</td>`;
   const head = isP(p) ? '<th class="num">登板</th><th class="num">勝敗</th><th class="num">S</th><th class="num">H</th><th class="num">投球回</th><th class="num">奪三振</th><th class="num">防御率</th>' : '<th class="num">試合</th><th class="num">打席</th><th class="num">打率</th><th class="num">本塁打</th><th class="num">打点</th><th class="num">盗塁</th><th class="num">OPS</th>';
-  const awards = (p.awards || []).slice(-8).map(a => `<span class="tag lamp">${a.y} ${esc(a.n)}</span>`).join(' ');
+  const hons = honorsHtml(p);
   let actions = '';
   if (mine) {
     const ex = curTurn() >= 44 || (p.yrs <= 1 && !(p.ren && p.ren.st === 'signed'));
@@ -157,7 +157,7 @@ MODALS.player = ({ id }) => {
           <dt>1軍在籍（FA）</dt><dd>${p.svc}年　<span class="small">${fa}</span>${kfa ? `<div class="small">${kfa}</div>` : ''}${tryX ? `<div class="small lamp">メジャー球団と交渉中（${HOW_JP[tryX.how]}・あと${Math.max(1, tryX.wk)}週ほど）</div>` : ''}</dd><dt>性格</dt><dd>${esc(PERS[p.per].n)}<div class="small muted">${esc(PERS[p.per].d)}</div></dd>
           <dt>故障のしやすさ</dt><dd>${p.inj >= 65 ? '<span class="neg">多い</span>' : p.inj >= 40 ? '普通' : '<span class="pos">少ない</span>'}${p.injW > 0 ? `<div class="small neg">${esc(p.injN)}（残り${Math.ceil(p.injW)}週）</div>` : ''}</dd>
           <dt>人気</dt><dd>${Math.round(p.pop)}</dd><dt>通算WAR</dt><dd>${careerWar(p)}</dd></dl>
-        ${awards ? `<div class="row">${awards}</div>` : ''}
+        ${hons ? `<div><div class="small muted" style="margin-bottom:4px">勲章</div><div class="hons">${hons}</div></div>` : ''}
         ${actions}
       </div>
     </div>
@@ -167,6 +167,25 @@ MODALS.player = ({ id }) => {
       <tr><td colspan="2"><b>通算</b>${p.preWar ? '<span class="small faint">（就任前を含む概算）</span>' : ''}</td>${car}<td class="num">${careerWar(p)}</td><td></td></tr></tbody></table></div>`
   };
 };
+/* 勲章：タイトル・表彰（回数）、通算の節目（いちばん上）、偉業、持っている記録、連続試合安打 */
+function honorsHtml(p) {
+  const out = [];
+  const cnt = {}; for (const a of p.awards || []) cnt[a.n] = (cnt[a.n] || 0) + 1;
+  for (const [n, c] of Object.entries(cnt)) out.push(`<span class="hon ${TITLE_NAMES.includes(n) ? 't' : 'a'}">${esc(n)}${c > 1 ? '×' + c : ''}</span>`);
+  const top = {};
+  for (const key of Object.keys(p.ms || {})) { const k = key.replace(/[0-9]+$/, ''), m = +key.slice(k.length); if (MS_NAME[k] && (!top[k] || m > top[k])) top[k] = m; }
+  for (const k in top) out.push(`<span class="hon m">通算${top[k]}${MS_NAME[k]}</span>`);
+  for (const f of p.feats || []) out.push(`<span class="hon f">${f.y} ${esc(FEATS[f.k] ? FEATS[f.k].n : f.k)}</span>`);
+  if (G.recs) {
+    for (const k in G.recs.lg) { const r = G.recs.lg[k]; if (r && r.pid === p.id) out.push(`<span class="hon r">リーグ記録 ${REC_DEFS[k].n} ${recFmt(k, r.v)}</span>`); }
+    for (const k in G.recs.car) { const r = G.recs.car[k]; if (r && r.pid === p.id) out.push(`<span class="hon r">歴代最多 ${CAR_DEFS[k].n} ${recFmt(k, r.v, true)}</span>`); }
+    const tm = p.team >= 0 ? G.recs.tm[p.team] || {} : {};
+    for (const k in tm) { const r = tm[k]; if (r && r.pid === p.id && !(G.recs.lg[k] && G.recs.lg[k].pid === p.id)) out.push(`<span class="hon r2">球団記録 ${REC_DEFS[k].n} ${recFmt(k, r.v)}</span>`); }
+  }
+  if ((p.hstr || 0) >= 10) out.push(`<span class="hon s">${p.hstr}試合連続安打中</span>`);
+  if (p.retAnn === G.year) out.push('<span class="hon a">今季限りで引退</span>');
+  return out.join('');
+}
 ACT.setFocus = el => { const p = P_(+el.dataset.id); if (p) p.focus = el.value; toast(el.value ? `${p.name}は${ATTR_JP[el.value]}を重点的に鍛えます` : 'おまかせにしました'); };
 function pracSelect(p) {
   const opts = pracOptions(p); const cur = p.prac ? p.prac.k + ':' + p.prac.key : '';

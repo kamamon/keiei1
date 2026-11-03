@@ -89,10 +89,10 @@ function pickStarter(tid, roles, dayNo) {
   const T = G.teams[tid]; const rot = roles.rot;
   for (let k = 0; k < rot.length; k++) {
     const idx = ((T.rotIdx || 0) + k) % rot.length; const p = P_(rot[idx]);
-    if (p && p.injW === 0 && dayNo - p.ls >= 6) { T.rotIdx = (idx + 1) % rot.length; p.ls = dayNo; return p; }
+    if (p && p.injW === 0 && dayNo - p.ls >= 6 && !benched(p)) { T.rotIdx = (idx + 1) % rot.length; p.ls = dayNo; return p; }
   }
   const rotSet = new Set(rot);
-  let cands = rosterLv(tid, 1).filter(p => isP(p) && p.injW === 0 && dayNo - p.ls >= 5 && relAvail(p, dayNo) && !rotSet.has(p.id));
+  let cands = rosterLv(tid, 1).filter(p => isP(p) && p.injW === 0 && dayNo - p.ls >= 5 && relAvail(p, dayNo) && !rotSet.has(p.id) && !benched(p));
   if (!cands.length) cands = rosterLv(tid, 1).filter(p => isP(p) && p.injW === 0);
   if (!cands.length) cands = roster(tid).filter(p => isP(p));
   const p = maxBy(cands, x => spOvr(x) + x.a.sta * 0.2);
@@ -100,7 +100,7 @@ function pickStarter(tid, roles, dayNo) {
 }
 function restTired(tid, lu) {
   const inLu = new Set(lu.map(x => x.p.id));
-  const bench = rosterLv(tid, 1).filter(p => !isP(p) && p.injW === 0 && !inLu.has(p.id));
+  const bench = rosterLv(tid, 1).filter(p => !isP(p) && p.injW === 0 && !inLu.has(p.id) && !benched(p));
   return lu.map(x => {
     if (x.p.fat >= 78 && chance(0.7) && bench.length) {
       const rep = maxBy(bench, p => slotScore(p, x.pos) + (x.pos === 'C' && !canCatch(p) ? -40 : 0));
@@ -144,7 +144,7 @@ function boxLine(side, id) { if (!side.box) return null; return side.box.bat.fin
 
 function playGame(hid, aid, ctx) {
   ctx = ctx || {};
-  const S = { score: [0, 0], line: [[], []], inn: 1, half: 0, log: ctx.log ? [] : null, wc: [null, null], lc: [null, null], leader: -1, ctx, walkoff: false, hrs: [] };
+  const S = { score: [0, 0], line: [[], []], inn: 1, half: 0, log: ctx.log ? [] : null, wc: [null, null], lc: [null, null], leader: -1, ctx, walkoff: false, hrs: [], gb: {} };
   S.park = parkHR(hid);
   S.maxInn = ctx.post ? 15 : 12;
   const sides = [setupSide(aid, 0, S), setupSide(hid, 1, S)];
@@ -197,7 +197,7 @@ function chooseReliever(S, def, lead, long) {
   const dayNo = S.ctx.dayNo || 0;
   const R = def.roles;
   const rotSet = new Set(R.rot);
-  const cand = rosterLv(def.tid, 1).filter(p => isP(p) && !def.usedIds.has(p.id) && !rotSet.has(p.id) && relAvail(p, dayNo));
+  const cand = rosterLv(def.tid, 1).filter(p => isP(p) && !def.usedIds.has(p.id) && !rotSet.has(p.id) && relAvail(p, dayNo) && !benched(p));
   if (!cand.length) return null;
   const inn = S.inn;
   const role = id => id === R.cl ? 'CL' : R.su[0] === id ? 'SU1' : R.su[1] === id ? 'SU2' : 'MR';
@@ -294,6 +294,8 @@ function halfInning(S, off, def, half) {
     const slot = off.lu[off.bi % off.lu.length]; off.bi++;
     const bat = slot.p;
     const st = bat.st; const bl = boxLine(off, bat.id);
+    const gb = rec ? (S.gb[bat.id] || (S.gb[bat.id] = { pa: 0, h: 0, s: 0, d: 0, t: 0, hr: 0, tid: off.tid })) : null;
+    if (gb) gb.pa++;
     const s0 = S.score[half];
     if (outs === 0 && B[0] && !B[2] && buntDecision(S, off, bat, half)) {
       ps.pc += ri(2, 4); ps.bf++;
@@ -326,17 +328,18 @@ function halfInning(S, off, def, half) {
       }
       case 'K': outs++; ps.outs++; ps.so++; if (rec) { st.ab++; st.so++; } if (bl) { bl.ab++; bl.so++; } break;
       case 'HR': {
-        if (rec) { st.ab++; st.h++; st.hr++; } ps.h++; ps.hr++; off.h++;
+        if (rec) { st.ab++; st.h++; st.hr++; gb.h++; gb.hr++; } ps.h++; ps.hr++; off.h++;
         if (bl) { bl.ab++; bl.h++; bl.hr++; }
         const n = (B[0] ? 1 : 0) + (B[1] ? 1 : 0) + (B[2] ? 1 : 0) + 1;
         for (let i = 2; i >= 0; i--) if (B[i]) { scoreRun(B[i], bat, true); B[i] = null; }
         scoreRun({ p: bat, rp: ps, er: true }, bat, true);
         S.hrs.push({ id: bat.id, tid: off.tid, n, inn: S.inn, no: rec ? st.hr : 0 });
+        if (S.walkoff) S.woHR = { id: bat.id, tid: off.tid, n };
         desc = (n === 1 ? 'ソロ本塁打' : n === 4 ? '満塁本塁打' : n + 'ラン本塁打') + (rec ? '（' + st.hr + '号）' : '');
         break;
       }
       case '1B': case '2B': case '3B': {
-        if (rec) { st.ab++; st.h++; if (r === '2B') st.d++; if (r === '3B') st.t++; }
+        if (rec) { st.ab++; st.h++; if (r === '2B') st.d++; if (r === '3B') st.t++; gb.h++; if (r === '1B') gb.s++; else if (r === '2B') gb.d++; else gb.t++; }
         ps.h++; off.h++;
         if (bl) { bl.ab++; bl.h++; if (r === '2B') bl.d++; if (r === '3B') bl.t++; }
         hitAdvance(r, B, outs, bat, ps, scoreRun, def.armAdj);
@@ -399,6 +402,28 @@ function halfInning(S, off, def, half) {
   return runs;
 }
 
+/* 1試合の偉業（公式戦）と連続試合安打 */
+function gameFeats(S) {
+  const out = [];
+  for (const sd of S.sides) {
+    const opp = S.sides[1 - sd.idx];
+    const outs = sum(sd.used, x => x.outs);
+    if (opp.h === 0 && outs >= 27) {
+      if (sd.used.length === 1) { const ps = sd.used[0]; out.push({ k: ps.bb + ps.hbp === 0 && sd.e === 0 ? 'perfect' : 'nono', pid: ps.p.id, tid: sd.tid }); }
+      else out.push({ k: 'nono2', pid: sd.used[0].p.id, tid: sd.tid });
+    }
+    for (const ps of sd.used) if (ps.so >= 15) out.push({ k: 'k15', pid: ps.p.id, tid: sd.tid, v: ps.so });
+  }
+  if (S.woHR && S.woHR.n === 4) out.push({ k: 'sayogs', pid: S.woHR.id, tid: S.woHR.tid });
+  for (const id in S.gb) {
+    const g = S.gb[id]; const p = P_(+id); if (!p) continue;
+    if (g.s && g.d && g.t && g.hr) out.push({ k: 'cycle', pid: p.id, tid: g.tid });
+    if (g.hr >= 3) out.push({ k: 'hr3', pid: p.id, tid: g.tid, v: g.hr });
+    if (g.h >= 5) out.push({ k: 'h5', pid: p.id, tid: g.tid, v: g.h });
+    if (g.h > 0) p.hstr = (p.hstr || 0) + 1; else if (g.pa >= 2) p.hstr = 0;
+  }
+  return out;
+}
 function finishGame(S) {
   const [A, H] = S.sides; const ctx = S.ctx;
   const sa = S.score[0], sh = S.score[1];
@@ -439,8 +464,9 @@ function finishGame(S) {
       pp.push({ id: ps.p.id, sp: ps.isSP, pc: ps.pc });
     }
   }
+  const feats = ctx.rec ? gameFeats(S) : null;
   const res = {
-    h: H.tid, a: A.tid, hs: sh, as: sa, tie, inn: S.inn, line: S.line, W: W ? W.p.id : null, L: L ? L.p.id : null, SV: SV ? SV.p.id : null,
+    h: H.tid, a: A.tid, hs: sh, as: sa, tie, inn: S.inn, line: S.line, W: W ? W.p.id : null, L: L ? L.p.id : null, SV: SV ? SV.p.id : null, feats,
     hits: [A.h, H.h], errs: [A.e, H.e], hrs: S.hrs, walkoff: S.walkoff, sp: [A.sp.id, H.sp.id],
     bp: A.lu.map(x => x.p.id).concat(H.lu.map(x => x.p.id)), pp
   };

@@ -33,6 +33,7 @@ function removeFromTeam(p) {
 }
 function assignNumber(p, tid) {
   const used = new Set(roster(tid).filter(x => x !== p && x.num >= 0).map(x => x.num));
+  for (const r of retiredNums(tid)) used.add(r.num);
   if (p.num >= 0 && !used.has(p.num) && ((p.lv === 3) === (p.num >= 100))) return;
   let pref;
   if (p.lv === 3) pref = Array.from({ length: 100 }, (_, i) => 100 + i);
@@ -77,6 +78,7 @@ function slotScore(p, slot) {
 /* ---------- 自動オーダー ---------- */
 function luScore(p, s) {
   let v = slotScore(p, s);
+  if (p.farewell === G.year) v += 60;
   if (s === 'CF') v += (p.a.spd - 60) * 0.15;
   if (s === 'C' && !canCatch(p)) v -= 25;
   return v;
@@ -102,7 +104,7 @@ function improveLineup(lu, bench) {
 }
 function autoLineup(tid, excludeIds) {
   const ex = excludeIds || new Set();
-  const bats = rosterLv(tid, 1).filter(p => !isP(p) && p.injW === 0 && !ex.has(p.id));
+  const bats = rosterLv(tid, 1).filter(p => !isP(p) && p.injW === 0 && !ex.has(p.id) && !benched(p));
   const used = new Set(); const lu = [];
   const order = ['C', 'SS', '2B', 'CF', '3B', 'RF', 'LF', '1B', 'DH'];
   for (const s of order) {
@@ -180,12 +182,12 @@ function computeLineup(tid) {
     const e = m[i];
     if (!e) { out.push(null); continue; }
     const p = P_(e.id);
-    if (!p || p.team !== tid || p.lv !== 1 || isP(p) || p.injW > 0 || used.has(p.id) || usedPos.has(e.pos)) { out.push({ hole: true, pos: e.pos }); continue; }
+    if (!p || p.team !== tid || p.lv !== 1 || isP(p) || p.injW > 0 || benched(p) || used.has(p.id) || usedPos.has(e.pos)) { out.push({ hole: true, pos: e.pos }); continue; }
     out.push({ p, pos: e.pos }); used.add(p.id); usedPos.add(e.pos);
   }
   // 欠けた枠（故障・降格など）は控えから自動で埋める
   const freePos = SLOTS.filter(s => !usedPos.has(s));
-  const bench = rosterLv(tid, 1).filter(p => !isP(p) && p.injW === 0 && !used.has(p.id));
+  const bench = rosterLv(tid, 1).filter(p => !isP(p) && p.injW === 0 && !used.has(p.id) && !benched(p));
   for (let i = 0; i < 9; i++) {
     if (out[i] && out[i].p) continue;
     let pos = out[i] && out[i].pos && freePos.includes(out[i].pos) ? out[i].pos : freePos[0];

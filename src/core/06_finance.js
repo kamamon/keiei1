@@ -35,6 +35,7 @@ function demandOf(hid, aid, dayIdx) {
   if (curTurn() === 16) mf *= 1.12;
   D *= mf;
   D *= 0.90 + O.pop / 100 * 0.22;
+  if (isUser(hid) && G.flags.buzzW > 0) D *= 1 + (G.flags.buzz || 0);
   return D;
 }
 function stadSatisfaction() {
