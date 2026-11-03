@@ -39,7 +39,8 @@ SCREENS.title = () => {
   if (s.step === 2) return titleSetup();
   if (s.step === 3) return titleLoad();
   if (s.step === 4) return titleCustom();
-  return `<div class="title"><div class="title-board">
+  const tp = artPhoto('title'), ti = tp ? '' : ilScene('title');
+  return `<div class="title${tp ? ' art-bg' : ti ? ' art-il' : ''}"${tp ? ` style="--art:url('${tp}')"` : ''}>${ti ? `<div class="title-il">${ti}</div>` : ''}<div class="title-board">
     <h1>球団社長</h1>
     <p>プロ野球経営シミュレーション</p>
     <div class="lamps"><span><i class="dot b"></i>補強</span><span><i class="dot s"></i>育成</span><span><i class="dot o"></i>経営</span></div>
@@ -210,7 +211,7 @@ ACT.importFile = el => {
 };
 MODALS.welcome = () => {
   const T = uT();
-  return { title: `${esc(G.user.name)}社長、ようこそ`, size: 'narrow', body: `<p>${esc(tName(T.id))}の球団社長に就任しました。チームを強くし、ファンを増やし、球団を黒字にするのがあなたの仕事です。</p>
+  return { title: `${esc(G.user.name)}社長、ようこそ`, size: 'narrow', body: `${art('office', { h: 'cut', kicker: `${G.year}年1月`, title: `${esc(tName(T.id))}の球団社長に就任`, eager: true })}<p>${esc(tName(T.id))}の球団社長に就任しました。チームを強くし、ファンを増やし、球団を黒字にするのがあなたの仕事です。</p>
     <ol class="small" style="padding-left:1.2em;margin:10px 0">
       <li>ホームの「やること」から、予算・中期計画・キャンプを決めます。</li>
       <li>右上の<b>「次の週へ」</b>で1週間ずつ進みます。▾ からまとめて進めることもできます。</li>
@@ -239,9 +240,12 @@ function afterAdvance(rep, quiet) {
     if (G.post && G.post.champ === T.id && G.flags.celGs !== G.year) { G.flags.celGs = G.year; openModal('cele', { k: 'gs' }); }
     else if (G.post && curTurn() === 36 && G.post.lgChamp && G.post.lgChamp.includes(T.id) && G.flags.celLg !== G.year) { G.flags.celLg = G.year; openModal('cele', { k: 'lg' }); }
     if (curTurn() === 0 && G.owner.review && !G.owner.review.seen) openModal('review');
+    if (curTurn() === SEASON_START && G.flags.openY !== G.year) { G.flags.openY = G.year; openModal('scene', { k: 'open' }); }
+    if (curTurn() === 39 && G.flags.draftY !== G.year) { G.flags.draftY = G.year; openModal('scene', { k: 'draft' }); }
+    const sl = (G.town.stageLog || []); if (sl.length && (G.flags.stageSeen || 0) < sl.length) { G.flags.stageSeen = sl.length; openModal('scene', { k: 'stage' }); }
     if (!quiet && rep && G.user.showWeekly && (rep.games.length || rep.exh || rep.news.length)) openModal('weekly');
     if (G.pending.length) openModal('event', { i: 0 });
-    if (curTurn() === 39 && G.draft && G.draft.stage !== 'done') toast('ドラフト会議が始まります。「ドラフト会議」画面へ', 'good');
+
   }
   render();
 }
@@ -329,13 +333,13 @@ ACT.openEvent = () => { if (G.pending.length) openModal('event', { i: 0 }); rend
 MODALS.review = () => {
   const r = G.owner.review; if (!r) return null; r.seen = true;
   const T = uT(); const h = G.fin.hist[G.fin.hist.length - 1];
-  return { title: `${r.y}年 オーナー評価`, size: 'narrow', body: `<div class="row sp"><div><div class="small muted">オーナーの信頼</div><div class="stat-big ${r.d >= 0 ? 'pos' : 'neg'}">${Math.round(r.trust)} <span class="small">（${r.d >= 0 ? '+' : ''}${Math.round(r.d)}）</span></div></div><div class="right small muted">${h ? `営業収支 ${fmtSigned(h.op != null ? h.op : h.net)}<br>観客 ${fmtPeople(h.att)}` : ''}</div></div>
+  return { title: `${r.y}年 オーナー評価`, size: 'narrow', body: `${art('office', { h: 'cut', kicker: `${r.y}年 年度末`, title: 'オーナー会議', eager: true })}<div class="row sp"><div><div class="small muted">オーナーの信頼</div><div class="stat-big ${r.d >= 0 ? 'pos' : 'neg'}">${Math.round(r.trust)} <span class="small">（${r.d >= 0 ? '+' : ''}${Math.round(r.d)}）</span></div></div><div class="right small muted">${h ? `営業収支 ${fmtSigned(h.op != null ? h.op : h.net)}<br>観客 ${fmtPeople(h.att)}` : ''}</div></div>
     <table class="t compact" style="margin-top:10px"><tbody>${r.notes.map(n => `<tr><td>${esc(n[0])}</td><td class="num ${n[1] >= 0 ? 'pos' : 'neg'}">${n[1] >= 0 ? '+' : ''}${n[1]}</td></tr>`).join('')}</tbody></table>
     ${r.subsidy ? `<p class="small">親会社が赤字のうち${fmtOku(r.subsidy)}を補填しました。</p>` : ''}${r.capex ? `<p class="small muted">設備投資 ${fmtOku(r.capex)} は営業収支の評価に含めていません。</p>` : ''}${r.tax ? `<p class="small muted">法人税等 ${fmtOku(r.tax)} を納めました。</p>` : ''}
     <p class="small muted">新しい年が始まりました。予算・中期計画・キャンプを確認しましょう。</p>`,
     foot: '<button class="btn" data-a="go" data-v="plan">中長期計画へ</button><button class="btn pri" data-a="closeModal">閉じる</button>' };
 };
-MODALS.gameover = () => ({ title: '球団社長を解任されました', size: 'narrow', body: `<p>${esc(G.gameOver.why)}。</p><p class="muted">在任：${G.startYear || START_YEAR}年〜${G.gameOver.y}年</p>`,
+MODALS.gameover = () => ({ title: '球団社長を解任されました', size: 'narrow', body: `${art('off', { h: 'cut', eager: true })}<p>${esc(G.gameOver.why)}。</p><p class="muted">在任：${G.startYear || START_YEAR}年〜${G.gameOver.y}年</p>`,
   foot: '<button class="btn" data-a="go" data-v="records">球団史を見る</button><button class="btn pri" data-a="toTitle">タイトルへ</button>' });
 ACT.toTitle = () => { closeAllModals(); UI.screen = 'title'; UI.title.step = 0; G = null; render(); };
 
@@ -357,7 +361,7 @@ SCREENS.home = () => {
   const F = G.fin; const ytdNet = opNet();
   const week = thisWeekGames();
   const leaders = homeLeaders();
-  return `<h1 class="h1">${phaseLabel()}</h1><p class="lead">${homeLead()}</p>
+  return `${art(phaseArt(t), { h1: true, kicker: `${G.year}年 ${G.month}月 第${G.week}週`, title: phaseLabel(), sub: homeLead(), eager: true })}
   <div class="grid g-home">
     <div class="stack">
       ${panel('やること', taskHtml, { flush: true })}
@@ -408,12 +412,24 @@ function homeLeaders() {
   return `<table class="t compact"><tbody>${bats.map(p => `<tr><td>${pLink(p)}</td><td class="num">${fmtAvg(bAvg(p.st))}</td><td class="num">${p.st.hr}本</td><td class="num">${p.st.rbi}点</td></tr>`).join('')}${pits.map(p => `<tr><td>${pLink(p)}</td><td class="num">防${fmtEra(pEra(p.st))}</td><td class="num">${p.st.w}勝${p.st.l}敗</td><td class="num">${p.st.sv ? p.st.sv + 'S' : p.st.hld ? p.st.hld + 'H' : p.st.so + 'K'}</td></tr>`).join('')}</tbody></table>`;
 }
 
+/* 大きな節目のカットイン */
+MODALS.scene = ({ k }) => {
+  const T = uT();
+  if (k === 'open') return { title: '開幕', size: 'narrow', body: `${art('season', { h: 'cut', kicker: `${G.year}年 3月`, title: 'ペナントレース開幕', sub: `${esc(tName(T.id))}の${G.year}年シーズンが始まります`, eager: true })}<p>143試合の戦いが始まります。毎週6試合。故障者の入れ替えと、7月末までの補強を忘れずに。</p><p class="small muted">去年の順位：${T.lastRank ? T.lastRank + '位' : '―'}　オーナーの期待：${expectedRank()}位前後</p>`,
+    foot: '<button class="btn" data-a="closeModal">閉じる</button><button class="btn pri" data-a="go" data-v="lineup">オーダーを確認する</button>' };
+  if (k === 'draft') return { title: 'ドラフト会議', size: 'narrow', body: `${art('draft', { h: 'cut', kicker: `${G.year}年 10月`, title: '運命のドラフト会議', sub: '1位は12球団が一斉に入札。重なれば抽選です', eager: true })}<p>スカウトが追いかけてきた有望株を指名する日です。</p>`,
+    foot: '<button class="btn" data-a="closeModal">あとで</button><button class="btn pri" data-a="go" data-v="draft">ドラフト会議へ</button>' };
+  if (k === 'stage') { const s = townStage(); const L = G.town.stageLog[G.town.stageLog.length - 1]; const n = TOWN_STAGES[L.i - 1][1];
+    return { title: '街が発展しました', size: 'narrow', body: `${art(townArt(L.i), { h: 'cut', kicker: `街の段階 ${L.i}／${TOWN_STAGES.length}`, title: n, eager: true })}<p>球場のまわりが「${n}」になりました。地域の愛着と人気が少し上がっています。</p>${s.next != null ? `<p class="small muted">次の「${s.nextN}」まで、いつもの賑わいがあと${Math.max(1, s.next - Math.floor(s.v))}です。</p>` : '<p class="small muted">これが最後の段階です。</p>'}`,
+      foot: '<button class="btn" data-a="closeModal">閉じる</button><button class="btn pri" data-a="go" data-v="town">街づくりへ</button>' }; }
+  return null;
+};
 MODALS.cele = ({ k }) => {
   const T = uT(); const gs = k === 'gs'; const y = gs ? G.year : G.year;
   const R = T.rec; const s = gs ? G.post.series.find(x => x.kind === 'gs') : null;
   const mvp = gs && G.post.mvp != null ? P_(G.post.mvp) : null;
   return { title: gs ? '日本一！' : 'リーグ優勝！', size: 'narrow',
-    body: `<div class="title-board" style="padding:26px 18px;box-shadow:none">${emblem(T, 84)}<h1 style="font-size:46px;margin-top:10px">${gs ? '日本一' : '優勝'}</h1><p>${esc(tName(T.id))}　${y}年${gs ? '' : '　' + LEAGUES[T.league]}</p>
+    body: `${art(gs ? 'champ' : 'post', { h: 'cut', eager: true })}<div class="title-board" style="padding:26px 18px;box-shadow:none">${emblem(T, 84)}<h1 style="font-size:46px;margin-top:10px">${gs ? '日本一' : '優勝'}</h1><p>${esc(tName(T.id))}　${y}年${gs ? '' : '　' + LEAGUES[T.league]}</p>
       <p class="small">${gs && s ? `グランドシリーズ ${s.winner === s.hi ? s.w[0] + '勝' + s.w[1] + '敗' : s.w[1] + '勝' + s.w[0] + '敗'}` : `${R.w}勝${R.l}敗${R.d ? R.d + '分' : ''}`}${mvp ? '　シリーズMVP ' + esc(mvp.name) : ''}</p></div>
       <p class="small muted" style="margin-top:12px">${gs ? '優勝記念グッズが飛ぶように売れています。オーナーもきっと喜んでいるはずです。' : 'このあとプレーオフで日本一を目指します。'}</p>`,
     foot: '<button class="btn pri" data-a="closeModal">閉じる</button>' };

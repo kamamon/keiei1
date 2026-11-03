@@ -100,7 +100,7 @@ SCREENS.stadium = () => {
   const tab = getTab('stadium', 'stad');
   const S = G.stad; const T = uT();
   const tb = tabs('stadium', [['stad', '本拠地球場'], ['team', 'チーム施設'], ['new', '球場の買収・新球場']], tab);
-  const head = `<h1 class="h1">球場・設備</h1><div class="panel" style="margin-bottom:16px">${tiles([['本拠地', esc(stadiumName()), S.dome ? 'ドーム' : '屋外'], ['収容人数', comma(capOf(T.id)) + '人', S.fac.seats.lv ? `増設Lv${S.fac.seats.lv}` : ''], ['観戦満足度', Math.round(stadSatisfaction()), '設備・状態・築年数で決まる'], ['所有', S.owned ? '球団所有' : '賃借', S.owned ? '使用料なし' : `使用料 ${fmtOku(S.rent)}／年`], ['築年数', (S.age || 0) + '年']])}</div>`;
+  const head = `${art(S.dome ? 'dome' : 'stadium', { h1: true, kicker: '球場・設備', title: esc(stadiumName()), sub: `${comma(capOf(T.id))}人・${S.dome ? 'ドーム' : '屋外'}・${S.owned ? '球団が保有' : '借りている球場'}` })}<div class="panel" style="margin-bottom:16px">${tiles([['本拠地', esc(stadiumName()), S.dome ? 'ドーム' : '屋外'], ['収容人数', comma(capOf(T.id)) + '人', S.fac.seats.lv ? `増設Lv${S.fac.seats.lv}` : ''], ['観戦満足度', Math.round(stadSatisfaction()), '設備・状態・築年数で決まる'], ['所有', S.owned ? '球団所有' : '賃借', S.owned ? '使用料なし' : `使用料 ${fmtOku(S.rent)}／年`], ['築年数', (S.age || 0) + '年']])}</div>`;
   let body = '';
   if (tab === 'stad') body = panel('球場の設備', `<div class="tw"><table class="t"><thead><tr><th>設備</th><th class="num">レベル</th><th>状態</th><th>増強</th><th>改修</th></tr></thead><tbody>${Object.keys(STAD_FAC).map(k => facRow('stad', k)).join('')}</tbody></table></div>`, { flush: true }) + '<p class="small muted">設備は少しずつ傷み、状態が下がると効果が落ちます。スタンド増設とフィールド整備はオフシーズン（10月〜2月）だけ着工できます。</p>';
   else if (tab === 'team') body = panel('チーム施設', `<div class="tw"><table class="t"><thead><tr><th>施設</th><th class="num">レベル</th><th>状態</th><th>増強</th><th>改修</th></tr></thead><tbody>${Object.keys(TEAM_FAC).map(k => facRow('team', k)).join('')}</tbody></table></div>`, { flush: true });
@@ -315,7 +315,7 @@ SCREENS.town = () => {
   const tab = getTab('town', 'map');
   const nEv = (tw.events || []).length;
   const stg = townStage();
-  const head = `<h1 class="h1">街づくり</h1><p class="lead">球場の周りに街をつくり、観客が来やすく、試合がない日も人が集まる「ボールパーク」を目指します。イベントで人を呼ぶと、空いている土地に民間の店や住宅が建ち、街が自然に育っていきます。</p>
+  const head = `${art(townArt(stg.i), { h1: true, kicker: `街づくり・段階 ${stg.i}／${stg.max}`, title: stg.n, sub: '球場の周りに街をつくり、試合がない日も人が集まる「ボールパーク」を目指します。イベントで人を呼ぶと、空いている土地に民間の店や住宅が建っていきます。' })}
   <div class="panel" style="margin-bottom:16px">${tiles([['街の段階', stg.n, `段階 ${stg.i}／${stg.max}`, 'txt'], ['アクセス', st.acc], ['賑わい', st.vib, st.vib !== st.vibBase ? `いつもの賑わい ${st.vibBase}` : ''], ['住民', fmtPeople(Math.round(st.pop))], ['地域の愛着', Math.round(tw.attach)], ['発展の勢い', Math.round(tw.dev || 0), (tw.dev || 0) >= DEV_START ? '民間の開発が進行中' : DEV_START + 'で民間の開発が始まる'], ['地価', '×' + tw.landIdx.toFixed(2)], ['街の収入', fmtOku(townWeeklyRevenue(curTurn() >= 11 && curTurn() <= 38)) + '／週']])}</div>
   ${tabs('town', [['map', '区画と建物'], ['ev', '街のイベント', nEv || null]], tab)}`;
   return head + (tab === 'ev' ? townEventsView() : townMapView());
@@ -382,7 +382,8 @@ function evEffects(d, m) {
 }
 function townEventsView() {
   const tw = G.town; const evs = tw.events || [];
-  const running = evs.length ? `<div class="lot">${evs.map(e => { const d = TOWN_EVENTS[e.k]; return `<div class="lot-row"><span style="font-size:22px">${d.i}</span><div style="flex:1;min-width:160px"><b>${d.n}</b> <span class="small muted">残り${e.wk}週</span>${bar(e.tot - e.wk, e.tot)}</div></div>`; }).join('')}</div>`
+  const evPic = evs.find(e => hasArt('ev_' + e.k));
+  const running = evs.length ? (evPic ? art('ev_' + evPic.k, { h: 'mini', title: TOWN_EVENTS[evPic.k].n, sub: '開催中' }) : '') + `<div class="lot">${evs.map(e => { const d = TOWN_EVENTS[e.k]; return `<div class="lot-row"><span style="font-size:22px">${d.i}</span><div style="flex:1;min-width:160px"><b>${d.n}</b> <span class="small muted">残り${e.wk}週</span>${bar(e.tot - e.wk, e.tot)}</div></div>`; }).join('')}</div>`
     : '<p class="muted" style="margin:0">いま開いているイベントはありません。下の一覧から開催できます（同時に2つまで）。</p>';
   const dev = tw.dev || 0;
   const sg = townStage();
@@ -390,7 +391,7 @@ function townEventsView() {
   const list = Object.entries(TOWN_EVENTS).map(([k, d]) => {
     const c = eventCanHost(k); const m = eventMult(k); const on = evs.some(e => e.k === k);
     const when = [d.months ? d.months.join('・') + '月' : '通年', d.off ? 'オフ限定' : '', `${d.wk}週間`].filter(Boolean).join('・');
-    return `<div class="evrow ${on ? 'on' : ''}"><div class="ei">${d.i}</div><div><b>${d.n}</b> <span class="small muted">${fmtOku(d.cost)}・${when}</span><div class="small muted">${d.d}</div>${evEffects(d, m)}</div>
+    return `<div class="evrow ${on ? 'on' : ''}${hasArt('ev_' + k) ? ' pic' : ''}">${hasArt('ev_' + k) ? art('ev_' + k, { h: 'thumb' }) : `<div class="ei">${d.i}</div>`}<div><b>${d.n}</b> <span class="small muted">${fmtOku(d.cost)}・${when}</span><div class="small muted">${d.d}</div>${evEffects(d, m)}</div>
       <button class="btn sm pri" data-a="hostEv" data-k="${k}" ${c.ok ? '' : 'disabled'}>開催する</button>${c.ok ? '' : `<div class="why">${esc(c.why)}</div>`}</div>`;
   }).join('');
   const log = (tw.evLog || []).slice(0, 8);
