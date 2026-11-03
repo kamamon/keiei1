@@ -76,6 +76,7 @@ function applyEdit(p, d) {
     if (isFinite(num) && num !== p.num) {
       const ok = p.lv === 3 ? num >= 100 && num <= 199 : num >= 0 && num <= 99;
       if (!ok) msgs.push(p.lv === 3 ? '育成選手の背番号は100〜199です（変えませんでした）' : '支配下選手の背番号は0〜99です（変えませんでした）');
+      else if (isRetiredNum(p.team, num)) msgs.push(`背番号${num}は永久欠番です（変えませんでした）`);
       else {
         const other = roster(p.team).find(x => x !== p && x.num === num);
         const old = p.num; p.num = num;

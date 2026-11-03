@@ -382,6 +382,64 @@ const IL_SCENES = {
     return s + ilPeople(c, 830, 30, ['#2c3e64', '#c94a4a', '#3b3b3b', '#7a4a8a', '#e8edf2'], 1.3) + ilFall(c, 70, 'snow');
   }
 };
+/* 記録・殿堂・永久欠番の場面 */
+Object.assign(IL_SCENES, {
+  feat(c) {
+    let s = ilSky(c, [[0, '#04060f'], [.5, '#0e1630'], [.66, '#23244a']]) + ilStars(c, 40, 250);
+    s += ilFirework(c, 300, 140, 100, '#ffd166', 3.4, .3) + ilFirework(c, 1300, 120, 120, '#6be1ff', 4, 1.8) + ilFirework(c, 980, 70, 70, '#ff8fb1', 3.6, 2.6);
+    s += ilSkyline(c, 300, 70, '#0b1020', '#ffd58a', 30);
+    s += ilBallpark(c, { crowd: ['#ffe08a', '#f4f4f4', '#ffd166', '#ffffff', '#c94a4a', '#e8edf2'] });
+    // スタンドのカメラのフラッシュ
+    for (let i = 0; i < 70; i++) {
+      const x = c.rr(30, 1570), u = x / 1600, yt = 300 - 380 * u * (1 - u) + 90, yb = 535 - 470 * u * (1 - u) - 12, y = c.rr(yt, yb);
+      s += `<g${ilAnim('twk', c.rr(.6, 1.6), c.rr(0, 2))}><circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(c.rr(2.2, 4))}" fill="#fff"/><path d="M${f1(x - 9)} ${f1(y)} L${f1(x + 9)} ${f1(y)} M${f1(x)} ${f1(y - 9)} L${f1(x)} ${f1(y + 9)}" stroke="#fff" stroke-width="1.4" opacity=".8"/></g>`;
+    }
+    // 主役に当たるスポットライト
+    s += `<path d="M260 0 L360 0 L860 800 L740 800 Z" fill="#fff6d0" opacity=".10"/><path d="M1240 0 L1340 0 L860 800 L740 800 Z" fill="#fff6d0" opacity=".10"/>`;
+    s += ilGlow(c, 'hero', 800, 740, 230, '#fff2c0', .55);
+    [[690, 780, .95], [910, 782, .95], [740, 812, 1.05], [860, 814, 1.05]].forEach(([x, y, k], i) => { s += ilPlayer(c, x, y, k, '#f4f4f4', '#22314f'); });
+    s += `<g${ilAnim('hop', .9, .2)}>${ilPlayer(c, 800, 770, 1.45, '#f4f4f4', '#22314f', 'jump')}</g>`;
+    return s + ilFall(c, 80, 'confetti', ['#ffd166', '#ffffff', '#ff8fb1', '#6be1ff']);
+  },
+  hof(c) {
+    let s = `<rect width="1600" height="900" fill="#150e0b"/>`;
+    s += `<rect width="1600" height="640" fill="${c.pat('wp', 200, 640, '<rect width="200" height="640" fill="#2a1c15"/><rect width="5" height="640" fill="#1b120e"/><rect y="600" width="200" height="40" fill="#20150f"/>')}"/>`;
+    s += `<rect y="0" width="1600" height="40" fill="#0f0a08"/>`;
+    const bronze = c.lg('brz', [[0, '#e0b06a'], [.45, '#b07a3c'], [1, '#6e4520']], 1, 1);
+    const plaque = (x, y, w, h, hi) => {
+      let p = `<path d="M${x + w / 2 - 34} 40 L${x + w / 2 + 34} 40 L${x + w + 40} ${y + h + 30} L${x - 40} ${y + h + 30} Z" fill="#ffe2a8" opacity="${hi ? .16 : .09}"/>`;
+      p += `<rect x="${x + w / 2 - 22}" y="40" width="44" height="12" rx="3" fill="#3a2a20"/><circle cx="${x + w / 2}" cy="56" r="7" fill="#fff1c9"${ilAnim('glow', c.rr(3, 5), c.rr(0, 4))}/>`;
+      p += `<rect x="${x - 8}" y="${y - 8}" width="${w + 16}" height="${h + 16}" rx="6" fill="#4a3020"/><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="4" fill="${bronze}"/>`;
+      p += `<rect x="${x + 8}" y="${y + 8}" width="${w - 16}" height="${h - 16}" rx="3" fill="none" stroke="#7a4f24" stroke-width="2.5"/>`;
+      const cx = x + w * .3, cy = y + h * .42;
+      p += `<path d="M${cx - w * .17} ${y + h - 14} Q ${cx} ${cy + h * .08} ${cx + w * .17} ${y + h - 14} Z" fill="#8a5a2b"/><circle cx="${cx}" cy="${cy}" r="${w * .1}" fill="#8a5a2b"/><path d="M${cx - w * .1} ${cy - w * .04} Q ${cx} ${cy - w * .17} ${cx + w * .1} ${cy - w * .04} Z" fill="#7a4f24"/>`;
+      for (let i = 0; i < 6; i++) p += `<rect x="${x + w * .52}" y="${f1(y + h * .2 + i * h * .11)}" width="${f1(w * c.rr(.25, .38))}" height="${f1(h * .045)}" rx="2" fill="#7a4f24" opacity=".85"/>`;
+      return p;
+    };
+    for (let i = 0; i < 5; i++) s += plaque(150 + i * 270, 130, 200, 150, i === 2);
+    for (let i = 0; i < 6; i++) s += plaque(40 + i * 265, 360, 170, 128, false);
+    s += `<rect y="620" width="1600" height="280" fill="${c.lg('fl', [[0, '#3b2a20'], [1, '#100b09']])}"/>`;
+    s += `<g opacity=".12" transform="translate(0 1250) scale(1 -1)">${[0, 1, 2, 3, 4].map(i => `<rect x="${150 + i * 270}" y="130" width="200" height="150" fill="#e0b06a"/>`).join('')}</g>`;
+    for (const x of [200, 520, 840, 1160, 1480]) s += `<rect x="${x - 6}" y="660" width="12" height="90" fill="#c9a24a"/><circle cx="${x}" cy="656" r="11" fill="#e6c36a"/>`;
+    s += `<path d="M200 672 Q 360 712 520 672 Q 680 712 840 672 Q 1000 712 1160 672 Q 1320 712 1480 672" stroke="#8b1e2b" stroke-width="9" fill="none"/>`;
+    return s + ilPeople(c, 860, 9, ['#1d1714', '#2a221d', '#3a2f28'], 1.7);
+  },
+  retnum(c) {
+    let s = ilSky(c, [[0, '#121a3d'], [.45, '#4a3a6e'], [.62, '#d47a4f'], [.68, '#f2b25f']]) + ilStars(c, 18, 170);
+    s += ilFirework(c, 330, 120, 90, '#ffd166', 4, .5) + ilFirework(c, 1270, 110, 100, '#ffffff', 4.4, 2.2);
+    s += ilBallpark(c, { crowd: ['#ffe08a', '#f4f4f4', '#c94a4a', '#ffffff', '#2c3e64', '#e8edf2'], fieldA: '#3a9a52', fieldB: '#338a49' });
+    s += `<path d="M560 0 L640 0 L790 300 L700 300 Z" fill="#fff6d0" opacity=".12"/><path d="M960 0 L1040 0 L900 300 L810 300 Z" fill="#fff6d0" opacity=".12"/>`;
+    s += ilGlow(c, 'jg', 800, 190, 300, '#fff1c4', .5);
+    const stripe = c.pat('pin', 22, 10, '<rect width="22" height="10" fill="#f7f5ee"/><rect x="10" width="2" height="10" fill="#22314f" opacity=".35"/>');
+    s += `<g transform="translate(800 196) scale(.95)"><rect x="-190" y="-150" width="380" height="300" rx="10" fill="#c9a24a"/><rect x="-178" y="-138" width="356" height="276" rx="6" fill="#132036"/>`;
+    s += `<path d="M-120 -100 L-58 -124 Q0 -102 58 -124 L120 -100 L168 -32 L116 -8 L102 -44 L102 126 L-102 126 L-102 -44 L-116 -8 L-168 -32 Z" fill="${stripe}" stroke="#22314f" stroke-width="5"/>`;
+    s += `<path d="M-58 -124 Q0 -92 58 -124" fill="none" stroke="#c94a4a" stroke-width="7"/>`;
+    s += `<g transform="translate(0 28)"><circle r="54" fill="#22314f"/><circle r="46" fill="none" stroke="#e6c36a" stroke-width="3"/><path d="M0 -34 L10 -10 L35 -10 L15 5 L22 30 L0 15 L-22 30 L-15 5 L-35 -10 L-10 -10 Z" fill="#e6c36a"/></g>`;
+    s += `</g>`;
+    for (let i = 0; i < 11; i++) s += ilPlayer(c, 470 + i * 66, 708 + Math.abs(i - 5) * 4, .95, '#f4f4f4', '#22314f');
+    return s + ilFall(c, 50, 'confetti', ['#ffd166', '#ffffff', '#c94a4a']);
+  }
+});
 /* 場面の SVG（なければ空） */
 function ilScene(k) {
   if (IL_CACHE[k] !== undefined) return IL_CACHE[k];

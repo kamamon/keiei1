@@ -233,6 +233,7 @@ function doNext() {
   afterAdvance(rep, false);
 }
 function afterAdvance(rep, quiet, since, weeks) {
+  const cq = (G.celeQ || []).splice(0);
   autosave();
   closeAllModals();
   const fresh = notesSince(since != null ? since : rep ? rep.note0 || 0 : G.noteSeq);
@@ -245,6 +246,7 @@ function afterAdvance(rep, quiet, since, weeks) {
     if (curTurn() === SEASON_START && G.flags.openY !== G.year) { G.flags.openY = G.year; openModal('scene', { k: 'open' }); }
     if (curTurn() === 39 && G.flags.draftY !== G.year) { G.flags.draftY = G.year; openModal('scene', { k: 'draft' }); }
     const sl = (G.town.stageLog || []); if (sl.length && (G.flags.stageSeen || 0) < sl.length) { G.flags.stageSeen = sl.length; openModal('scene', { k: 'stage' }); }
+    for (const it of cq.slice(quiet ? -2 : -4)) openModal('cele2', it);
     const weekly = !quiet && rep && G.user.showWeekly && (rep.games.length || rep.exh || rep.news.length || fresh.length);
     if (weekly) { openModal('weekly'); markNotesRead(fresh.map(n => n.id)); }
     else if (!quiet) toastNotes(fresh);
@@ -393,9 +395,33 @@ SCREENS.home = () => {
         <div style="margin-top:10px"><div class="row sp small"><span>オーナーの信頼</span><span class="num">${Math.round(G.owner.trust)}</span></div>${bar(G.owner.trust, 100, G.owner.trust >= 50 ? 'ball' : G.owner.trust >= 25 ? 'strike' : 'out')}</div>`,
         { act: '<button class="btn sm" data-a="go" data-v="finance">財務</button>' })}
       ${leaders ? panel('チームの成績上位', leaders) : ''}
+      ${recWatchHtml()}
     </div>
   </div>`;
 };
+/* 注目の記録：大台・連続試合安打・シーズン記録に迫る自球団の選手 */
+function recWatchHtml() {
+  if (!G.recs) return '';
+  const t = curTurn(); const ut = G.user.tid; const items = [];
+  for (const p of roster(ut)) {
+    const c = careerOf(p);
+    for (const k in MILESTONES) {
+      if (!!MS_BAT[k] === isP(p)) continue;
+      const m = MILESTONES[k].find(x => x >= MS_BIG[k] && !(p.ms && p.ms[k + x])); if (!m) continue;
+      const need = m - (c[k] || 0); if (need > 0 && need <= MS_NEAR[k] * 4) items.push({ s: need / MS_NEAR[k], h: `${pLink(p)} 通算${m}${MS_NAME[k]}まで<b>あと${need}${MS_UNIT[k]}</b>` });
+    }
+    if (t >= SEASON_START && t <= MAKEUP_TURN) {
+      if ((p.hstr || 0) >= 10) items.push({ s: 2 - p.hstr / 20, h: `${pLink(p)} <b>${p.hstr}試合連続安打</b>中（リーグ記録${recFmt('hstr', G.recs.lg.hstr.v)}）` });
+      for (const k of ['hr', 'h', 'sb', 'so', 'sv']) {
+        const d = REC_DEFS[k]; if ((!!d.bat) === isP(p)) continue; const r = G.recs.lg[k]; const v = d.f(p.st);
+        if (r && r.pid !== p.id && v >= r.v * 0.8 && v > 0) items.push({ s: (r.v - v) / Math.max(1, r.v * 0.1), h: `${pLink(p)} ${d.n} <b>${recFmt(k, v)}</b>（リーグ記録${recFmt(k, r.v)}）` });
+      }
+    }
+  }
+  if (!items.length) return '';
+  items.sort((a, b) => a.s - b.s);
+  return panel('注目の記録', `<ul class="watch">${items.slice(0, 5).map(x => `<li>${x.h}</li>`).join('')}</ul>`, { act: '<button class="btn sm" data-a="go" data-v="records" data-tab="recs">記録</button>' });
+}
 function homeLead() {
   const t = curTurn();
   if (t <= 3) return '新しいシーズンの準備期間です。予算、中期計画、春季キャンプを決めましょう。';
@@ -432,6 +458,14 @@ MODALS.scene = ({ k }) => {
     return { title: '街が発展しました', size: 'narrow', body: `${art(townArt(L.i), { h: 'cut', kicker: `街の段階 ${L.i}／${TOWN_STAGES.length}`, title: n, eager: true })}<p>球場のまわりが「${n}」になりました。地域の愛着と人気が少し上がっています。</p>${s.next != null ? `<p class="small muted">次の「${s.nextN}」まで、いつもの賑わいがあと${Math.max(1, s.next - Math.floor(s.v))}です。</p>` : '<p class="small muted">これが最後の段階です。</p>'}`,
       foot: '<button class="btn" data-a="closeModal">閉じる</button><button class="btn pri" data-a="go" data-v="town">街づくりへ</button>' }; }
   return null;
+};
+/* 記録・偉業・殿堂入り・永久欠番・引退試合の演出 */
+const CELE_HEAD = { feat: '記録達成', hof: '野球殿堂入り', retnum: '永久欠番', post: 'タイトル獲得', season: '引退試合' };
+MODALS.cele2 = it => {
+  const p = it.pid != null ? P_(it.pid) : null;
+  return { title: it.head || CELE_HEAD[it.art] || 'おめでとうございます', size: 'narrow',
+    body: `${art(it.art || 'feat', { h: 'cut', kicker: esc(it.kicker || ''), title: esc(it.title || ''), sub: esc(it.sub || ''), eager: true })}<p>${esc(it.body || '')}</p>`,
+    foot: `${p ? `<button class="btn" data-a="player" data-id="${p.id}">選手を見る</button>` : ''}<button class="btn pri" data-a="closeModal">閉じる</button>` };
 };
 MODALS.cele = ({ k }) => {
   const T = uT(); const gs = k === 'gs'; const y = gs ? G.year : G.year;

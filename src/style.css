@@ -477,3 +477,35 @@ table.t.ed-attr { width: auto; }
 .t select[data-c="setPrac"] { width: 210px; }
 @media (max-width: 860px) { .bell { width: 34px; height: 34px; margin-right: 6px; } .notes li { grid-template-columns: minmax(0, 1fr) auto; } .notes li .d { grid-column: 1 / -1; } }
 @media (max-width: 480px) { .ed-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ed-grid .w2 { grid-column: 1 / -1; } .notes li { grid-template-columns: 1fr; } .notes li .acts { justify-content: flex-start; } }
+
+/* ===== 記録・偉業・殿堂・永久欠番 ===== */
+.hons { display: flex; flex-wrap: wrap; gap: 4px; }
+.hon { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 10px; font-size: 11.5px; line-height: 18px; border: 1px solid var(--line2); color: var(--ink2); white-space: nowrap; }
+.hon.t { border-color: var(--lamp); color: var(--lamp); }
+.hon.a { border-color: var(--line2); color: var(--ink); }
+.hon.m { border-color: var(--ball); color: var(--ball); }
+.hon.f { background: linear-gradient(180deg, #FFE27A, var(--sk-au)); color: var(--sk-au-ink); border-color: transparent; font-weight: 700; }
+.hon.r { background: var(--team); color: var(--team-ink); border-color: var(--team); }
+.hon.r2 { border-color: var(--team); color: var(--ink); }
+.hon.s { border-color: var(--strike); color: var(--strike); }
+.watch { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13.5px; }
+.watch li { padding-left: 14px; position: relative; }
+.watch li::before { content: ''; position: absolute; left: 0; top: .6em; width: 6px; height: 6px; border-radius: 50%; background: var(--lamp); }
+.g-hof { grid-template-columns: minmax(0, 1fr) 340px; align-items: start; }
+.plaques { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.plaque { position: relative; padding: 12px 14px 12px; border-radius: 6px; color: #2b1706; background: linear-gradient(160deg, #e3b673, #b07a3c 55%, #7d5126);
+  box-shadow: inset 0 0 0 2px rgba(60, 30, 5, .35), inset 0 0 0 6px rgba(255, 230, 180, .18), 0 6px 16px rgba(0, 0, 0, .35); }
+.plaque.mine { box-shadow: inset 0 0 0 2px rgba(60, 30, 5, .35), 0 0 0 3px var(--team), 0 6px 16px rgba(0, 0, 0, .35); }
+.plaque .pl-y { font-size: 11px; opacity: .8; display: flex; justify-content: space-between; }
+.plaque .pl-new { background: #2b1706; color: #ffe0a0; border-radius: 8px; padding: 0 6px; font-size: 10.5px; }
+.plaque .pl-n { margin: 4px 0 2px; font-family: var(--f-disp); font-size: 20px; letter-spacing: .04em; line-height: 1.25; }
+.plaque .pl-s { font-size: 11.5px; opacity: .85; }
+.plaque .pl-l { margin-top: 6px; font-size: 12.5px; font-weight: 700; }
+.plaque .pl-f { margin-top: 4px; font-size: 11px; opacity: .8; }
+.retnums { display: flex; flex-wrap: wrap; gap: 10px; }
+.retnum { display: grid; justify-items: center; gap: 2px; min-width: 96px; padding: 8px 8px 10px; border-radius: 6px; background: var(--panel2); border: 1px solid var(--line2); border-top: 5px solid var(--team); font-size: 12.5px; }
+.retnum b { font-family: var(--f-disp); font-size: 34px; line-height: 1.1; color: var(--ink); }
+.ret-row { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 8px; align-items: center; font-size: 13px; }
+.ret-l { display: flex; flex-wrap: wrap; gap: 4px; }
+@media (max-width: 1100px) { .g-hof { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 480px) { .ret-row { grid-template-columns: 1fr; } }

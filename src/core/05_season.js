@@ -92,6 +92,7 @@ function playSeasonGame(g, dayIdx, isMakeup) {
   gameInjuries(res);
   if (userGame) { storeBox(g.id, res, g, dayIdx); userGameNews(res, g); }
   milestoneCheck(res);
+  featCheck(res, g);
 }
 function playDay(dayGames, dayIdx, isMakeup) {
   G.dayNo++;
@@ -332,6 +333,8 @@ function decideAwards() {
   if (mine(A.mvp)) addNews('award', `${mine(A.mvp).name}がリーグMVPに輝きました`, { important: true, tid: ut });
   if (mine(A.roy)) addNews('award', `${mine(A.roy).name}が新人王を受賞`, { important: true, tid: ut });
   if (mine(A.ace)) addNews('award', `${mine(A.ace).name}がゴールデンアーム賞を受賞`, { important: true, tid: ut });
+  const aw = [['MVP', mine(A.mvp)], ['新人王', mine(A.roy)], ['ゴールデンアーム賞', mine(A.ace)]].filter(x => x[1]);
+  if (aw.length) G.celeQ.push({ art: 'post', head: '年間表彰', kicker: `${G.year}年 表彰式`, title: aw.length === 1 ? `${aw[0][1].name}が${aw[0][0]}に` : aw.map(x => x[0]).join('・') + 'を受賞', sub: aw.map(x => `${x[0]} ${x[1].name}`).join('　'), body: '表彰式の壇上で、受賞した選手がファンへの感謝を語りました。', pid: aw[0][1].id });
   const b9n = [].concat(...Object.values(A.b9)).map(mine).filter(Boolean);
   if (b9n.length) addNews('award', `ベストナインに${b9n.map(p => p.name).join('、')}が選出`, { tid: ut });
   return res;

@@ -21,7 +21,10 @@ const ART = {
   ev_hanabi: { alt: '球場の上の花火', tone: 'night' },
   ev_gourmet: { alt: 'グルメフェス', tone: 'sun' },
   ev_music: { alt: '音楽フェス', tone: 'night' },
-  ev_xmas: { alt: 'イルミネーション', tone: 'ice' }
+  ev_xmas: { alt: 'イルミネーション', tone: 'ice' },
+  feat: { alt: '記録達成の瞬間の球場', tone: 'night', or: ['champ'] },
+  hof: { alt: '野球殿堂のレリーフ', tone: 'dusk' },
+  retnum: { alt: '永久欠番のセレモニー', tone: 'dusk', or: ['stadium'] }
 };
 /* その場面の画像がなければ、近い場面の画像を使う（or） */
 /* 場面の絵：イラスト（コードで描く）か、写真（Canva で作ったもの。ない場面はイラスト） */

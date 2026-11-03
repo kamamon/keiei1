@@ -37,6 +37,7 @@ function genRoster(T) {
     p.yrs = (ovr(p) >= 72 && age >= 26 && age <= 33) ? ri(1, 4) : 1;
     if (o.frn) { p.sal = roundSal(p.sal * 1.2); p.prFrom = pick(FRN_FROM); }
     synthCareer(p);
+    markPastMilestones(p);
     return p;
   };
   for (let i = 0; i < 14; i++) add('P', 'SP', {});
@@ -139,6 +140,8 @@ function newGame(o) {
     train: 'normal', autoSwap: true, autoRoster: false, showWeekly: true, theme: 'night', tutorial: true,
     ownerMode: C ? C.owner : 'normal', custom: !!C, noteStop: true, noteToast: true, osNote: false
   };
+  G.celeQ = [];
+  seedHistory(false);
   for (const t of G.teams) genRoster(t);
   const d = defs[T.id]; const fl = d.fac;
   const f = (lv) => ({ lv: Math.max(0, lv), cond: ri(72, 92) });
@@ -260,6 +263,7 @@ function advanceWeek() {
   townWeekly();
   weeklyPopularity(weekRes);
   weeklyScouting();
+  recordsWeekly();
   eventsWeekly();
   weeklyMLB();
   if (t >= SEASON_START && t <= MAKEUP_TURN) for (const T of G.teams) for (const p of rosterLv(T.id, 1)) p.w1 = (p.w1 || 0) + 1;
@@ -281,6 +285,7 @@ function advanceWeek() {
   report.cash = G.fin.cash - finBefore.cash;
   report.news = G.news.slice(0, G.news.length - report.news0).filter(n => (n.imp || n.tid === ut) && !n.nt).slice(0, 12);
   report.notes = notesSince(report.note0).map(n => n.id);
+  if (G.celeQ && G.celeQ.length > 8) G.celeQ.splice(0, G.celeQ.length - 8);
   G.weekly = report;
   touch();
   return report;
@@ -290,6 +295,8 @@ function seasonEnd() {
   for (let lg = 0; lg < 2; lg++) standings(lg).forEach(x => { x.t.lastRank = x.rank; if (x.rank === 1) { x.t.titles.lg++; x.t.pop = clamp(x.t.pop + 2, 0, 99); x.t.popBonus = (x.t.popBonus || 0) + 6; } if (x.rank <= 3) x.t.popBonus = (x.t.popBonus || 0) + 1.5; if (x.rank === 6) x.t.popBonus = (x.t.popBonus || 0) - 2; });
   for (const id in G.players) { const p = G.players[id]; p.sTeam = p.team; if ((p.w1 || 0) >= 12) p.svc++; p.w1 = 0; }
   decideTitles();
+  seasonRecordsEnd();
+  titleCelebrate();
   const ut = G.user.tid; const rk = uT().lastRank;
   if (rk === 1) { addNews('post', `${tName(ut)}がリーグ優勝！`, { important: true, tid: ut }); book('rev', 'prize', 10000); }
   else addNews('league', `公式戦が終了。${tName(ut)}は${LEAGUES[uT().league]}${rk}位でした`, { important: true, tid: ut });
@@ -321,6 +328,10 @@ function phaseStart(t) {
   if (t === 16) genForeign(5);
   if (t === 39) startDraft();
   if (t === 22 || t === 29) phenomBuzz(t);
+  if (t === 30 || t === 32 || t === 34) titleRaceNotes();
+  if (t === 32) retireAnnounce();
+  if (t === SEASON_END) { titleSitCheck(); farewellWeek(); }
+  if (t === MAKEUP_TURN) farewellDone();
   if (t === 40) {
     processRetirements();
     aiReleases();
@@ -426,6 +437,7 @@ function newYearStart() {
   genSchedule();
   genDraftClass();
   fcRenewal();
+  hofVote();
   G.budget = Object.assign(defaultBudget(uT()), G.budget);
   if (G.plan.end < G.year) { G.plan = { goals: [], start: G.year, end: G.year + 2, set: false }; }
   addNews('owner', `${G.year}年が始まりました。予算と中期計画を確認しましょう`, { important: true, tid: G.user.tid });
@@ -542,6 +554,8 @@ function deserialize(str) {
 /* 古いセーブを今の仕組みに合わせる */
 function migrateSave() {
   G.notes = G.notes || []; G.noteSeq = G.noteSeq || 0; G.mlbTry = G.mlbTry || []; G.mlbAway = G.mlbAway || []; G.mlb = G.mlb || [];
+  G.celeQ = G.celeQ || [];
+  if (!G.recs) seedHistory(true);
   if (G.user) { if (G.user.noteStop == null) G.user.noteStop = true; if (G.user.noteToast == null) G.user.noteToast = true; if (G.user.osNote == null) G.user.osNote = false; }
   const all = Object.values(G.players).concat(G.prospects || [], G.foreign || [], G.mlbAway.map(m => m.p));
   for (const p of all) {
