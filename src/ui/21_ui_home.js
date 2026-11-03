@@ -217,6 +217,7 @@ MODALS.welcome = () => {
       <li>右上の<b>「次の週へ」</b>で1週間ずつ進みます。▾ からまとめて進めることもできます。</li>
       <li>3月末に開幕。ドラフトは10月、FAは11月、契約更改は12月です。</li>
       <li>年末にオーナーが1年を評価します。信頼がなくなると解任です。</li>
+      <li>右上のベルには、工事の完了や選手の成長・故障など、何かが完了したり変わったりしたときのお知らせが届きます。</li>
     </ol><p class="small muted">進行は毎週ブラウザに自動保存されます。</p>`,
     foot: '<button class="btn pri" data-a="closeModal">はじめる</button>' };
 };
@@ -231,9 +232,10 @@ function doNext() {
   const rep = advanceWeek();
   afterAdvance(rep, false);
 }
-function afterAdvance(rep, quiet) {
+function afterAdvance(rep, quiet, since, weeks) {
   autosave();
   closeAllModals();
+  const fresh = notesSince(since != null ? since : rep ? rep.note0 || 0 : G.noteSeq);
   if (G.gameOver) openModal('gameover');
   else {
     const T = uT();
@@ -243,8 +245,12 @@ function afterAdvance(rep, quiet) {
     if (curTurn() === SEASON_START && G.flags.openY !== G.year) { G.flags.openY = G.year; openModal('scene', { k: 'open' }); }
     if (curTurn() === 39 && G.flags.draftY !== G.year) { G.flags.draftY = G.year; openModal('scene', { k: 'draft' }); }
     const sl = (G.town.stageLog || []); if (sl.length && (G.flags.stageSeen || 0) < sl.length) { G.flags.stageSeen = sl.length; openModal('scene', { k: 'stage' }); }
-    if (!quiet && rep && G.user.showWeekly && (rep.games.length || rep.exh || rep.news.length)) openModal('weekly');
+    const weekly = !quiet && rep && G.user.showWeekly && (rep.games.length || rep.exh || rep.news.length || fresh.length);
+    if (weekly) { openModal('weekly'); markNotesRead(fresh.map(n => n.id)); }
+    else if (!quiet) toastNotes(fresh);
+    if (quiet && fresh.length) { openModal('notes', { since, n: weeks, fresh: fresh.map(n => n.id) }); markNotesRead(fresh.map(n => n.id)); }
     if (G.pending.length) openModal('event', { i: 0 });
+    osNotify(fresh);
 
   }
   render();
@@ -262,13 +268,13 @@ MODALS.nextMenu = () => ({
     <button class="btn" data-a="ahead" data-m="4">4週間進める</button>
     <button class="btn" data-a="ahead" data-m="event">次の行事・判断まで進める</button>
     <button class="btn" data-a="ahead" data-m="season">${curTurn() < MAKEUP_TURN ? '公式戦の終わりまで進める' : '年末まで進める'}</button>
-  </div><p class="small muted" style="margin-top:10px">ドラフト会議や判断が必要な出来事があると、そこで止まります。</p>`
+  </div><p class="small muted" style="margin-top:10px">ドラフト会議や判断が必要な出来事があると、そこで止まります。${G.user.noteStop ? '「4週間」「次の行事」では、大事なお知らせ（工事の完了や長期の故障など）でも止まります。' : ''}進めた間のお知らせは、終わったあとにまとめて表示します。</p>`
 });
 let aheadStop = false;
 ACT.stopAhead = () => { aheadStop = true; };
 ACT.ahead = el => {
   const m = el.dataset.m; closeAllModals(); renderModalRoot();
-  const startT = curTurn(), startY = G.year; let n = 0; const ut = G.user.tid; const r0 = { w: uT().rec.w, l: uT().rec.l };
+  const startT = curTurn(), startY = G.year; let n = 0; const ut = G.user.tid; const r0 = { w: uT().rec.w, l: uT().rec.l }; const seq0 = G.noteSeq || 0;
   const keyTurns = [0, 4, 11, 36, 39, 40, 44];
   aheadStop = false; UI.busy = true; render();
   const step = () => {
@@ -278,13 +284,14 @@ ACT.ahead = el => {
       if (m === '4' && n >= 4) stop = true;
       if (m === 'event' && (G.pending.length || keyTurns.includes(t) || (G.compPending && G.compPending.length))) stop = true;
       if (m === 'season' && ((startT < MAKEUP_TURN && t >= 36) || (startT >= MAKEUP_TURN && t === 0) || G.year > startY + 1)) stop = true;
+      if (m !== 'season' && G.user.noteStop && notesSince(seq0).some(x => x.pr === 'hi')) stop = true;
       if (n >= 60) stop = true;
     }
     if (stop) {
       UI.busy = null; busyHide();
       const R = uT().rec;
       const msg = `${n}週進めました` + (R.w + R.l > r0.w + r0.l ? `（${R.w - r0.w}勝${R.l - r0.l}敗）` : '');
-      afterAdvance(G.weekly, true); toast(msg, 'good');
+      afterAdvance(G.weekly, true, seq0, n); toast(msg, 'good');
       return;
     }
     advanceWeek(); n++;
@@ -299,6 +306,8 @@ MODALS.weekly = () => {
   const ut = G.user.tid; const T = uT();
   let body = '';
   const games = r.games.map(id => G.boxes[id]).filter(Boolean);
+  const ns = (r.notes || []).map(id => (G.notes || []).find(n => n.id === id)).filter(Boolean);
+  if (ns.length) body += panel(`お知らせ ${ns.length}件`, notesList(ns, ns.map(n => n.id)), { flush: true, cls: 'hl' }) + '<div style="height:12px"></div>';
   if (games.length) {
     body += `<div class="row sp" style="margin-bottom:8px"><div><span class="stat-big">${r.w}勝${r.l}敗${r.d ? r.d + '分' : ''}</span> <span class="muted">今週</span></div><div class="muted">${G.post && curTurn() >= 36 ? '' : `${LEAGUES[T.league]} ${teamRank(ut)}位　${T.rec.w}勝${T.rec.l}敗${T.rec.d ? T.rec.d + '分' : ''}`}</div></div>`;
     body += `<div class="panel">${games.map(miniGame).join('')}</div>`;
@@ -323,7 +332,7 @@ function newsLi(n) { return `<li class="${n.imp ? 'imp' : ''}"><span class="d">$
 MODALS.event = ({ i }) => {
   const e = G.pending[i || 0]; if (!e) return null;
   const def = EVENTS[e.id];
-  return { title: esc(def.t), size: 'narrow', body: `<p>${esc(def.text(e.data))}</p><div class="lot">${def.ch.map((c, ci) => `<button class="btn" style="justify-content:space-between;text-align:left;white-space:normal" data-a="evChoose" data-i="${i || 0}" data-c="${ci}"><b>${esc(c.l)}</b><span class="small muted">${esc(c.d)}</span></button>`).join('')}</div><p class="small faint" style="margin-top:10px">決めずに閉じると、3週後に一番下の選択肢で自動的に処理されます。</p>`,
+  return { title: esc(def.t), size: 'narrow', body: `<p>${esc(def.text(e.data))}</p><div class="lot">${def.ch.map((c, ci) => `<button class="btn" style="justify-content:space-between;text-align:left;white-space:normal" data-a="evChoose" data-i="${i || 0}" data-c="${ci}"><b>${esc(c.l)}</b><span class="small muted">${esc(typeof c.d === 'function' ? c.d(e.data) : c.d)}</span></button>`).join('')}</div><p class="small faint" style="margin-top:10px">決めずに閉じると、3週後に一番下の選択肢で自動的に処理されます。</p>`,
     foot: '<button class="btn" data-a="closeModal">あとで決める</button>' };
 };
 ACT.evChoose = el => { const msg = resolveEvent(+el.dataset.i, +el.dataset.c); closeModal(); if (msg) toast(msg); if (G.pending.length && !UI.modal) openModal('event', { i: 0 }); render(); };

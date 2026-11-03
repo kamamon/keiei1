@@ -44,22 +44,27 @@ function assignNumber(p, tid) {
 function numStr(p) { return p.num >= 100 ? String(p.num).padStart(3, '0') : String(p.num); }
 
 /* ---------- 守備位置の適性 ---------- */
-function fitPos(p, slot) {
-  if (slot === 'DH') return 1;
-  const pp = p.pos;
-  if (pp === 'P') return 0;
+/* 本職＝1。サブポジション（△○◎）があればその分だけ守れる。経験のない位置は似た位置ほどましだが、サブより劣る */
+function baseFit(pp, slot) {
   if (slot === 'LF' || slot === 'CF' || slot === 'RF') {
-    if (pp === 'OF') return 1;
     if (pp === '2B' || pp === 'SS') return 0.82;
     if (pp === '1B' || pp === '3B') return 0.72;
     return 0.5;
   }
-  if (slot === pp) return 1;
   const m = { SS: { '2B': 0.85, '3B': 0.8 }, '2B': { SS: 0.93, '3B': 0.85 }, '3B': { SS: 0.92, '2B': 0.85, '1B': 0.75 }, '1B': { '3B': 0.92, OF: 0.85, C: 0.88, '2B': 0.9, SS: 0.9 }, C: {} };
   const row = m[slot];
   if (row && row[pp]) return row[pp];
   if (slot === 'C') return 0.25;
   return 0.6;
+}
+function fitPos(p, slot) {
+  if (slot === 'DH') return 1;
+  const pp = p.pos;
+  if (pp === 'P') return 0;
+  if (subKey(slot) === pp) return 1;
+  const b = baseFit(pp, slot) * 0.9;
+  const lv = subLv(p, slot);
+  return lv ? Math.max(SUB_FIT[lv], b) : b;
 }
 function fatPen(p) { return Math.max(0, (p.fat || 0) - 55) * 0.25; }
 function slotScore(p, slot) {
@@ -70,6 +75,31 @@ function slotScore(p, slot) {
 }
 
 /* ---------- 自動オーダー ---------- */
+function luScore(p, s) {
+  let v = slotScore(p, s);
+  if (s === 'CF') v += (p.a.spd - 60) * 0.15;
+  if (s === 'C' && !canCatch(p)) v -= 25;
+  return v;
+}
+/* 守備位置の入れ替え・控えとの交代で全体の得点が上がる限り直す（強打者を不慣れな守備に就かせない） */
+function improveLineup(lu, bench) {
+  for (let it = 0; it < 30; it++) {
+    let best = 0, act = null;
+    for (let i = 0; i < lu.length; i++) for (let j = i + 1; j < lu.length; j++) {
+      const a = lu[i], b = lu[j];
+      const d = luScore(a.p, b.pos) + luScore(b.p, a.pos) - luScore(a.p, a.pos) - luScore(b.p, b.pos);
+      if (d > best + 0.01) { best = d; act = ['sw', i, j]; }
+    }
+    for (let i = 0; i < lu.length; i++) for (let k = 0; k < bench.length; k++) {
+      const d = luScore(bench[k], lu[i].pos) - luScore(lu[i].p, lu[i].pos);
+      if (d > best + 0.01) { best = d; act = ['in', i, k]; }
+    }
+    if (!act) break;
+    if (act[0] === 'sw') { const a = lu[act[1]], b = lu[act[2]]; const t = a.pos; a.pos = b.pos; b.pos = t; }
+    else { const out = lu[act[1]].p; lu[act[1]].p = bench[act[2]]; bench[act[2]] = out; }
+  }
+  return lu;
+}
 function autoLineup(tid, excludeIds) {
   const ex = excludeIds || new Set();
   const bats = rosterLv(tid, 1).filter(p => !isP(p) && p.injW === 0 && !ex.has(p.id));
@@ -79,13 +109,12 @@ function autoLineup(tid, excludeIds) {
     let best = null, bv = -1e9;
     for (const p of bats) {
       if (used.has(p.id)) continue;
-      let v = slotScore(p, s);
-      if (s === 'CF') v += (p.a.spd - 60) * 0.15;
-      if (s === 'C' && p.pos !== 'C') v -= 25;
+      const v = luScore(p, s);
       if (v > bv) { bv = v; best = p; }
     }
     if (best) { lu.push({ p: best, pos: s }); used.add(best.id); }
   }
+  improveLineup(lu, bats.filter(p => !used.has(p.id)));
   // 野手が足りない場合は2軍から（AIの緊急措置）
   if (lu.length < 9) {
     const extra = rosterLv(tid, 2).filter(p => !isP(p) && p.injW === 0 && !used.has(p.id)).sort((a, b) => offVal(b) - offVal(a));
@@ -162,7 +191,7 @@ function computeLineup(tid) {
     let pos = out[i] && out[i].pos && freePos.includes(out[i].pos) ? out[i].pos : freePos[0];
     if (!pos) pos = 'DH';
     if (freePos.includes(pos)) freePos.splice(freePos.indexOf(pos), 1);
-    const best = maxBy(bench.filter(p => !used.has(p.id)), p => slotScore(p, pos) + (pos === 'C' && p.pos !== 'C' ? -25 : 0));
+    const best = maxBy(bench.filter(p => !used.has(p.id)), p => slotScore(p, pos) + (pos === 'C' && !canCatch(p) ? -25 : 0));
     if (best) { out[i] = { p: best, pos }; used.add(best.id); } else out[i] = null;
   }
   return out.filter(x => x && x.p);
@@ -217,8 +246,8 @@ function swapInjured(tid) {
     let rep;
     if (isP(p)) rep = maxBy(cands, x => Math.max(spOvr(x), rpOvr(x)));
     else {
-      const needC = rosterLv(tid, 1).filter(x => x.pos === 'C' && x.injW === 0).length < 2;
-      rep = maxBy(cands, x => ovr(x) + (needC && x.pos === 'C' ? 30 : 0) + (x.pos === p.pos ? 4 : 0));
+      const needC = rosterLv(tid, 1).filter(x => canCatch(x) && x.injW === 0).length < 2;
+      rep = maxBy(cands, x => ovr(x) + (needC && canCatch(x) ? 30 : 0) + (x.pos === p.pos ? 4 : subLv(x, p.pos) * 1.5));
     }
     if (rep) rep.lv = 1;
   }
@@ -230,7 +259,7 @@ function swapInjured(tid) {
 function teamDefense(lu) {
   const W = { C: 1.2, SS: 1.3, '2B': 1.1, '3B': 1.0, CF: 1.1, LF: 0.7, RF: 0.8, '1B': 0.6, DH: 0 };
   let s = 0, w = 0;
-  for (const x of lu) { const ww = W[x.pos] || 0; if (!ww) continue; s += (defVal(x.p) * fitPos(x.p, x.pos) - (1 - fitPos(x.p, x.pos)) * 20) * ww; w += ww; }
+  for (const x of lu) { const ww = W[x.pos] || 0; if (!ww) continue; const f = fitPos(x.p, x.pos), fx = skFx(x.p); s += ((defVal(x.p) + fx.thr * 1.2 - (fx.err > 1 ? 3 : 0)) * f - (1 - f) * 20) * ww; w += ww; }
   return w ? s / w : 55;
 }
 function teamPower(tid) {

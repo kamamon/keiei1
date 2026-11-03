@@ -127,7 +127,7 @@ function newGame(o) {
     v: 1, year: y0, startYear: y0, month: 1, week: 1, nid: 1, sid: 1, gid: 1, dayNo: 0, stamp: 0,
     teams: [], players: {}, staff: {}, staffPool: [], prospects: [], foreign: [], fapool: [], faMarket: [], compPending: [],
     news: [], pending: [], evCool: {}, boxes: {}, boxOrder: [], hist: { seasons: [], user: [] }, legends: [], retiredCoaches: [], mlb: [], trades: [],
-    flags: {}, post: null, draft: null, sched: null, day: 0, weekly: null, gameOver: null
+    flags: {}, post: null, draft: null, sched: null, day: 0, weekly: null, gameOver: null, notes: [], noteSeq: 0, mlbTry: [], mlbAway: []
   };
   const defs = TEAM_DEFS.map(d => Object.assign({}, d));
   if (C) applyCustomDef(defs[o.team], C);
@@ -137,7 +137,7 @@ function newGame(o) {
   G.user = {
     tid: T.id, name: o.name || '球団社長', policy: o.policy || 'balance', lineupMode: 'auto', manual: { lu: [], rot: [], su: [], cl: null },
     train: 'normal', autoSwap: true, autoRoster: false, showWeekly: true, theme: 'night', tutorial: true,
-    ownerMode: C ? C.owner : 'normal', custom: !!C
+    ownerMode: C ? C.owner : 'normal', custom: !!C, noteStop: true, noteToast: true, osNote: false
   };
   for (const t of G.teams) genRoster(t);
   const d = defs[T.id]; const fl = d.fac;
@@ -173,12 +173,14 @@ function newGame(o) {
     const f = clamp(lim / pay, 0.6, 2.2);
     for (const p of roster(t.id)) if (p.sal > 1500 && p.lv !== 3) p.sal = roundSal(Math.max(1500, p.sal * f));
   }
+  // 能力をそろえたあとで特殊能力を決め直す（持ち味に合った能力がつくように）
+  for (const t of G.teams) for (const p of roster(t.id)) genSkills(p, 0);
   genSchedule();
   genDraftClass();
   genForeign(14);
   computeSimCenter();
   touch();
-  addNews('owner', `${G.user.name}が${tName(T.id)}の球団社長に就任。オーナーから「${ownerHope(T)}」と期待を託されました`, { important: true, tid: T.id });
+  addNews('owner', `${G.user.name}が${tName(T.id)}の球団社長に就任。オーナーから「${ownerHope(T)}」と期待を託されました`, { important: true, tid: T.id, note: false });
   return G;
 }
 function ownerHope(T) {
@@ -234,7 +236,7 @@ function advanceWeek() {
   const t = curTurn();
   const snap = teamSnapshot();
   const finBefore = { rev: yearTotal('rev'), exp: yearTotal('exp'), cash: G.fin.cash };
-  const report = { t, date: nowStr(), games: [], exh: null, news0: G.news.length };
+  const report = { t, date: nowStr(), games: [], exh: null, news0: G.news.length, note0: G.noteSeq || 0 };
   const g0 = G.gid;
   if (t >= 8 && t <= 10) report.exh = playExhibitions();
   if (t >= SEASON_START && t <= SEASON_END) playWeekGames(t);
@@ -259,6 +261,7 @@ function advanceWeek() {
   weeklyPopularity(weekRes);
   weeklyScouting();
   eventsWeekly();
+  weeklyMLB();
   if (t >= SEASON_START && t <= MAKEUP_TURN) for (const T of G.teams) for (const p of rosterLv(T.id, 1)) p.w1 = (p.w1 || 0) + 1;
   for (const id in G.players) G.players[id].wkG = 0;
   aiWeekly();
@@ -267,6 +270,7 @@ function advanceWeek() {
   // 日付を進める
   G.week++; if (G.week > 4) { G.week = 1; G.month++; if (G.month > 12) { G.month = 1; G.year++; } }
   phaseStart(curTurn());
+  noteReminders(curTurn());
   // 週の報告
   const ut = G.user.tid;
   for (const id of G.boxOrder) { const b = G.boxes[id]; if (b && id >= g0) report.games.push(id); }
@@ -275,7 +279,8 @@ function advanceWeek() {
   report.rev = yearTotal('rev') - finBefore.rev; report.exp = yearTotal('exp') - finBefore.exp;
   if (t === 47) { report.rev = null; report.exp = null; }
   report.cash = G.fin.cash - finBefore.cash;
-  report.news = G.news.slice(0, G.news.length - report.news0).filter(n => n.imp || n.tid === ut).slice(0, 12);
+  report.news = G.news.slice(0, G.news.length - report.news0).filter(n => (n.imp || n.tid === ut) && !n.nt).slice(0, 12);
+  report.notes = notesSince(report.note0).map(n => n.id);
   G.weekly = report;
   touch();
   return report;
@@ -315,10 +320,12 @@ function phaseStart(t) {
   }
   if (t === 16) genForeign(5);
   if (t === 39) startDraft();
+  if (t === 22 || t === 29) phenomBuzz(t);
   if (t === 40) {
     processRetirements();
     aiReleases();
-    declareFA();
+    const back = mlbSeasonEnd();
+    declareFA(back);
     postingRequests();
   }
   if (t === 41) { aiFABids(); if (G.fallCamp.on) { book('exp', 'camp', 4000); addNews('camp', '秋季キャンプで若手が鍛錬中', { tid: ut }); } }
@@ -342,6 +349,7 @@ function opNet() { const F = G.fin; return yearTotal('rev') - (F.y.rev.subsidy |
 function subsidyCap() { const T = uT(); return Math.round(allowedDeficit() + (20000 + T.market * 10000) * (0.3 + G.owner.trust / 100) * POLICIES[G.user.policy].budget); }
 function yearEnd() {
   winterLeague();
+  skillYearly();
   archiveSeason();
   applyContractsYearEnd();
   // 収支の締め
@@ -500,6 +508,8 @@ function userTasks() {
   if (G.fin.cash < 0) add('cash', '資金がマイナスです。融資や経費削減を検討してください', 'finance', true);
   if (G.owner.trust < 20) add('trust', 'オーナーの信頼が低下しています', 'plan', true);
   if (t >= 40 && G.user.lastSeenWinter !== G.year && t <= 46) add('winter', '若手をウィンターリーグへ派遣できます（12月）', 'training');
+  if ((G.mlbTry || []).some(x => isUser(x.from))) add('mlb', 'メジャー球団と交渉中の選手がいます。結果はお知らせで届きます', 'fa');
+  if (t >= 28 && t <= 38) { const ph = phenomOf(); if (ph) add('phenom', `「10年に一度の逸材」${ph.name}（${ph.pr.school}）がドラフト候補にいます`, 'scout'); }
   if (G.week <= 2) {
     const pm = G.month === 1 ? 12 : G.month - 1;
     const season = Object.entries(TOWN_EVENTS).filter(([k, d]) => d.months && d.months.includes(G.month) && !d.months.includes(pm) && eventCanHost(k).ok);
@@ -524,12 +534,21 @@ function deserialize(str) {
   for (const id in G.players) NAMESET.add(G.players[id].name);
   for (const p of G.prospects) NAMESET.add(p.name);
   for (const p of G.foreign) NAMESET.add(p.name);
+  for (const m of G.mlbAway || []) NAMESET.add(m.p.name);
   migrateSave();
   touch();
   return G;
 }
 /* 古いセーブを今の仕組みに合わせる */
 function migrateSave() {
+  G.notes = G.notes || []; G.noteSeq = G.noteSeq || 0; G.mlbTry = G.mlbTry || []; G.mlbAway = G.mlbAway || []; G.mlb = G.mlb || [];
+  if (G.user) { if (G.user.noteStop == null) G.user.noteStop = true; if (G.user.noteToast == null) G.user.noteToast = true; if (G.user.osNote == null) G.user.osNote = false; }
+  const all = Object.values(G.players).concat(G.prospects || [], G.foreign || [], G.mlbAway.map(m => m.p));
+  for (const p of all) {
+    if (!p.sub || !p.sx) genSubs(p);
+    if (!p.sk) genSkills(p, p.gen ? 1 : 0);
+    if (p.prac === undefined) p.prac = null;
+  }
   if (G.town) { computeTownStats(); if (G.town.stageMax == null) { G.town.stageMax = townStage().i; G.town.stageLog = []; } }
   const S = G.sponsors; if (!S) return;
   S.ng = S.ng || {}; S.sol = S.sol || {};

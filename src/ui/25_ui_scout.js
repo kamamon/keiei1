@@ -27,7 +27,7 @@ SCREENS.scout = () => {
 function prospectTable(id, list, pickBtn) {
   const cols = [
     { k: 'm', l: '★', v: p => p.pr.mark ? 1 : 0, h: p => `<button class="btn xs ${p.pr.mark ? 'on' : ''}" data-a="scMark" data-id="${p.id}" aria-label="指名候補">${p.pr.mark ? '★' : '☆'}</button>` },
-    { k: 'n', l: '名前', v: p => p.name, h: p => `<a class="pl" data-a="player" data-id="${p.id}">${esc(p.name)}</a>${p.pr.local ? ' <span class="tag b">地元志望</span>' : ''}` },
+    { k: 'n', l: '名前', v: p => p.name, h: p => `<a class="pl" data-a="player" data-id="${p.id}">${esc(p.name)}</a>${p.pr.gen ? ' ' + genTag(p, true) : ''}${p.pr.local ? ' <span class="tag b">地元志望</span>' : ''}` },
     { k: 'sch', l: '所属', v: p => p.pr.cat, h: p => `<span class="small">${esc(p.pr.school)}</span> <span class="tag">${p.pr.cat}</span>` },
     { k: 'reg', l: '地域', v: p => p.home, h: p => `<span class="small muted">${esc(REGIONS[p.home])}</span>` },
     { k: 'pos', l: '位置', v: p => p.pos, h: p => isP(p) ? (p.pt === 'SP' ? '投手(先)' : '投手(救)') : POS_JP[p.pos] },
@@ -48,12 +48,13 @@ ACT.scMark = el => { const p = G.prospects.find(x => x.id === +el.dataset.id); i
 function prospectModal(p) {
   const keys = isP(p) ? PIT_KEYS : BAT_KEYS; const sc = p.pr.sc; const sig = scoutSigma(p);
   const attr = keys.map(k => { const v = shownAttr(p, k); const rg = k === 'vel' ? Math.round(sig * 0.3) : Math.round(sig); return `<div class="row sp"><span class="small">${ATTR_JP[k]}</span><span>${k === 'vel' ? v + 'km/h' : av(v)} <span class="small faint">±${rg}</span></span></div>`; }).join('');
-  return { title: `${esc(p.name)} <span class="small muted">${esc(p.pr.school)}</span>`, size: 'narrow',
-    body: `<div class="row"><span class="tag">${p.pr.cat}</span><span class="tag">${isP(p) ? '投手' : POS_JP[p.pos]}</span><span class="small muted">${p.age}歳　${handStr(p)}　${esc(REGIONS[p.home])}</span></div>
+  return { title: `${esc(p.name)} <span class="small muted">${esc(p.pr.school)}</span> ${genTag(p)}`, size: 'narrow',
+    body: `${p.pr.gen ? `<p class="gen-note">「${esc(p.pr.nick || '怪物')}」と呼ばれる、10年に一度の逸材です。1位指名は複数球団の競合が確実です。</p>` : ''}<div class="row"><span class="tag">${p.pr.cat}</span><span class="tag">${isP(p) ? '投手' : POS_JP[p.pos]}</span><span class="small muted">${p.age}歳　${handStr(p)}　${esc(REGIONS[p.home])}</span></div>
       <dl class="kv" style="margin-top:10px"><dt>注目度</dt><dd>${p.pr.hype}</dd><dt>調査度</dt><dd>${Math.round(sc)}%</dd><dt>推定総合</dt><dd>${av(shownOvr(p))}</dd><dt>推定伸びしろ</dt><dd>${shownPot(p) != null ? gr(shownPot(p)) : '<span class="faint">調査25%以上で判明</span>'}</dd>
       <dt>性格</dt><dd>${sc >= 60 ? esc(PERS[p.per].n) : '<span class="faint">調査60%以上で判明</span>'}</dd><dt>故障のしやすさ</dt><dd>${sc >= 80 ? (p.inj >= 65 ? '多い' : p.inj >= 40 ? '普通' : '少ない') : '<span class="faint">調査80%以上で判明</span>'}</dd>
-      <dt>意中の球団</dt><dd>${sc >= 50 ? (p.pr.pref != null ? tMark(p.pr.pref) : (p.pr.local ? '地元球団を希望' : '特になし')) : '<span class="faint">調査50%以上で判明</span>'}</dd></dl><hr class="sep">${attr}`,
-    foot: `<button class="btn" data-a="closeModal">閉じる</button><button class="btn ${p.pr.mark ? '' : 'pri'}" data-a="scMarkM" data-id="${p.id}">${p.pr.mark ? '候補から外す' : '指名候補に入れる'}</button>` };
+      <dt>意中の球団</dt><dd>${sc >= 50 ? (p.pr.pref != null ? tMark(p.pr.pref) : (p.pr.local ? '地元球団を希望' : '特になし')) : '<span class="faint">調査50%以上で判明</span>'}</dd></dl><hr class="sep">${attr}
+      <hr class="sep">${!isP(p) ? `<div class="row small" style="margin-bottom:6px">守れる位置：${POS_JP[p.pos]} ${subTags(p, { empty: '<span class="faint">ほかになし</span>' })}</div>` : ''}<div class="small muted" style="margin-bottom:4px">特殊能力</div>${sc >= 50 ? skChips(p) : '<span class="faint small">調査50%以上で判明</span>'}`,
+    foot: `<button class="btn" data-a="closeModal">閉じる</button><button class="btn" data-a="peOpen" data-id="${p.id}">編集</button><button class="btn ${p.pr.mark ? '' : 'pri'}" data-a="scMarkM" data-id="${p.id}">${p.pr.mark ? '候補から外す' : '指名候補に入れる'}</button>` };
 }
 ACT.scMarkM = el => { const p = G.prospects.find(x => x.id === +el.dataset.id); if (p) p.pr.mark = !p.pr.mark; renderModalRoot(); render(); };
 
@@ -101,10 +102,24 @@ ACT.dPick = el => {
   if (D.stage === 'r1') {
     const r = userDraftPick(id);
     const mine = r && r.picks.find(x => x.teams.includes(G.user.tid));
-    if (mine) { const p = G.prospects.find(y => y.id === mine.pid); if (mine.win === G.user.tid) toast(mine.teams.length > 1 ? `抽選に勝ちました！ ${p.name}の交渉権を獲得` : `${p.name}を単独で1位指名しました`, 'good'); else toast(`抽選で外れました…（${p.name}は${tShort(mine.win)}へ）`, 'bad'); }
+    if (mine) {
+      const p = G.prospects.find(y => y.id === mine.pid);
+      if (p && p.pr.gen) openModal('lottery', { pid: p.id, win: mine.win, n: mine.teams.length });
+      else if (mine.win === G.user.tid) toast(mine.teams.length > 1 ? `抽選に勝ちました！ ${p.name}の交渉権を獲得` : `${p.name}を単独で1位指名しました`, 'good'); else toast(`抽選で外れました…（${p.name}は${tShort(mine.win)}へ）`, 'bad');
+    }
   } else { userDraftPick(id); const st = draftAdvance(); if (st === 'done') finishDraft(); }
   UI.resetScroll = true; render();
 };
 ACT.dNext = () => { const st = draftAdvance(); if (st === 'done') finishDraft(); render(); };
 ACT.dStop = () => { userDraftStop(); const st = draftAdvance(); if (st === 'done') finishDraft(); render(); };
 ACT.dAuto = () => { autoUserDraft(); toast('残りの指名を自動で行いました'); render(); };
+
+/* 逸材の抽選の結果 */
+MODALS.lottery = ({ pid, win, n }) => {
+  const p = G.prospects.find(x => x.id === pid) || P_(pid); if (!p) return null;
+  const me = win === G.user.tid; const nick = (p.pr && p.pr.nick) || (p.prInfo && p.prInfo.nick) || '怪物';
+  return { title: me ? '交渉権を獲得！' : '抽選の結果', size: 'narrow',
+    body: `${art('draft', { h: 'cut', kicker: n > 1 ? `${n}球団が競合` : '単独指名', title: me ? `「${esc(nick)}」の交渉権を獲得` : `${esc(tShort(win))}が交渉権を獲得`, sub: `${esc(p.name)}（${esc((p.pr || p.prInfo || {}).school || '')}）`, eager: true })}
+      <p>${me ? `${n > 1 ? '当たりくじを引き当てました！' : ''}10年に一度の逸材、${esc(p.name)}の交渉権を手にしました。入団が決まれば、人気とグッズの売上も期待できます。` : `${esc(p.name)}の交渉権は${esc(tName(win))}が獲得しました。外れ1位の指名に進みます。`}</p>`,
+    foot: '<button class="btn pri" data-a="closeModal">次へ</button>' };
+};

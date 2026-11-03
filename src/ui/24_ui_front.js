@@ -42,7 +42,7 @@ SCREENS.contracts = () => {
       { k: 'ovr', l: '総合', v: ovr, h: p => av(ovr(p)) },
       { k: 'sal', l: '年俸', v: p => p.sal, num: true, h: p => fmtSal(p.sal) }, { k: 'yrs', l: '残り', v: p => p.yrs, num: true, h: p => p.yrs + '年' },
       { k: 'fair', l: '能力相応の目安', v: p => valueSalary(ovr(p)), num: true, h: p => `<span class="faint">${fmtSal(roundSal(valueSalary(ovr(p))))}</span>` },
-      { k: 'svc', l: 'FA', v: p => p.svc, h: p => p.frn ? '<span class="faint">―</span>' : faEligible(p) ? '<span class="tag lamp">FA権</span>' : `<span class="small faint">あと${Math.max(0, (p.faUsed ? p.faUsed + 4 : 8) - p.svc)}年</span>` },
+      { k: 'svc', l: 'FA', v: p => p.svc, h: p => p.frn ? '<span class="faint">―</span>' : (faEligible(p) ? '<span class="tag lamp">FA権</span>' : `<span class="small faint">あと${Math.max(0, (p.faUsed ? p.faUsed + 4 : 8) - p.svc)}年</span>`) + (p.svc >= kfaNeed(p) ? ' <span class="tag s">海外FA</span>' : '') + (p.per === 'mlb' ? ' <span class="small muted">メジャー志向</span>' : '') },
       { k: 'nx', l: '来季', h: p => p.ren && p.ren.st === 'signed' ? `<span class="small">${fmtSal(p.ren.sal)}</span>` : '' }
     ], ps, { sort: { k: 'sal', d: true } }), { flush: true });
   } else {
@@ -131,7 +131,7 @@ SCREENS.fa = () => {
       { k: 'pos', l: '位置', v: x => x.p.pos, h: x => POS_JP[x.p.pos] }, { k: 'age', l: '年齢', v: x => x.p.age, num: true, h: x => x.p.age },
       { k: 'o', l: '総合', v: x => ovr(x.p), h: x => av(ovr(x.p)) },
       { k: 'st', l: '今季', h: x => `<span class="small">${statLine(x.p)}</span>` },
-      { k: 'from', l: '前所属', v: x => x.f.from, h: x => tMark(x.f.from) }, { k: 'rk', l: 'ランク', v: x => x.f.rank, h: x => `<span class="tag ${x.f.rank === 'A' ? 'o' : x.f.rank === 'B' ? 's' : ''}">${x.f.rank}</span>` },
+      { k: 'from', l: '前所属', v: x => x.f.from, h: x => x.f.mlb ? `<span class="tag lamp">メジャー帰り</span> ${x.f.prev != null ? tMark(x.f.prev) : ''}` : tMark(x.f.from) }, { k: 'rk', l: 'ランク', v: x => x.f.rank, h: x => `<span class="tag ${x.f.rank === 'A' ? 'o' : x.f.rank === 'B' ? 's' : ''}">${x.f.rank}</span>` },
       { k: 'ask', l: '希望', v: x => x.f.ask, num: true, h: x => `${fmtSal(x.f.ask)}<span class="small muted">×${x.f.askYrs}年</span>` },
       { k: 'of', l: '獲得に動く球団', v: x => Object.keys(x.f.offers).length, num: true, h: x => Object.keys(x.f.offers).filter(k => +k !== ut).length },
       { k: 'me', l: 'あなたの提示', h: x => x.f.offers[ut] ? `${fmtSal(x.f.offers[ut].sal)}×${x.f.offers[ut].yrs}年` : '' },
@@ -150,8 +150,18 @@ SCREENS.fa = () => {
       { k: 'per', l: '性格', h: p => p.team === ut ? esc(PERS[p.per].n) : '' }
     ], soon, { sort: { k: 'o', d: true }, limit: 40 }), { flush: true }) + '<p class="small muted">自球団の選手は、選手詳細の「契約延長を打診」で複数年契約を結べば、FA宣言を防げます。</p>';
   }
+  html += mlbPanel();
   return html;
 };
+/* メジャー挑戦（交渉中・今オフ海を渡った選手） */
+function mlbPanel() {
+  const T = G.mlbTry || []; const gone = (G.mlb || []).filter(x => x.y === G.year && curTurn() >= 40);
+  if (!T.length && !gone.length) return '';
+  const rows = T.map(x => { const p = P_(x.pid); if (!p) return ''; return `<tr class="${isUser(x.from) ? 'me' : ''}"><td>${pLink(p)}</td><td>${tMark(x.from)}</td><td>${HOW_JP[x.how]}</td><td>${interestLabel(mlbInterest(p))}</td><td class="small">交渉中（あと${Math.max(1, x.wk)}週ほど）</td></tr>`; }).join('') +
+    gone.map(x => `<tr class="${isUser(x.from) ? 'me' : ''}"><td>${esc(x.name)}</td><td>${tMark(x.from)}</td><td>${esc(x.how)}</td><td></td><td class="small">${esc(x.club || 'メジャー')}へ${x.yrs ? '（' + x.yrs + '年契約）' : ''}${x.fee ? '・譲渡金' + fmtOku(x.fee) : ''}</td></tr>`).join('');
+  return '<div style="height:16px"></div>' + panel('メジャー挑戦', `<div class="tw"><table class="t compact"><thead><tr><th>選手</th><th>所属</th><th>方法</th><th>メジャーの関心</th><th>状況</th></tr></thead><tbody>${rows}</tbody></table></div>`, { flush: true }) +
+    '<p class="small muted">海外FA権（1軍で9年）を持つ選手や、球団がポスティングを認めた選手が、メジャー球団と交渉します。獲得球団が現れなければ残留します。自球団の選手は、11月〜12月第2週に選手の詳細からポスティングにかけられます。</p>';
+}
 ACT.compMoney = el => { resolveComp(+el.dataset.i, null); toast('金銭補償を受け取りました', 'good'); render(); };
 ACT.compPick = el => { const p = P_(+el.dataset.id); resolveComp(+el.dataset.i, +el.dataset.id); toast(`人的補償で${p ? p.name : '選手'}を獲得しました`, 'good'); render(); };
 ACT.faOfferOpen = el => { const f = G.faMarket.find(x => x.id === +el.dataset.id); if (!f) return; const cur = f.offers[G.user.tid]; UI.f.fa = { id: f.id, sal: cur ? cur.sal : f.ask, yrs: cur ? cur.yrs : f.askYrs }; openModal('faOffer', { id: f.id }); render(); };
@@ -258,6 +268,7 @@ function foreignModal(p) {
   const keys = isP(p) ? PIT_KEYS : BAT_KEYS; const s = 2 + 10 * (1 - p.pr.sc / 100);
   return { title: `${esc(p.name)} <span class="small muted">${POS_JP[p.pos]}・${p.age}歳</span>`, size: 'narrow',
     body: `<dl class="kv"><dt>前所属</dt><dd>${esc(p.pr.school)}</dd><dt>推定総合</dt><dd>${av(shownFrnOvr(p))}</dd><dt>適応力</dt><dd>${adaptLabel(p)}</dd><dt>調査度</dt><dd>${Math.round(p.pr.sc)}%</dd><dt>条件</dt><dd>${fmtSal(p.fa.ask)}×${p.fa.yrs}年／移籍金${fmtOku(p.fa.fee)}</dd><dt>性格</dt><dd>${p.pr.sc >= 50 ? esc(PERS[p.per].n) : '不明'}</dd></dl>
-      <hr class="sep">${keys.map(k => `<div class="row sp"><span class="small">${ATTR_JP[k]}</span><span>${k === 'vel' ? Math.round(p.a.vel + (p.pr.noise.ovr * s * 0.3)) + 'km/h' : av(clamp(Math.round(p.a[k] + p.pr.noise.ovr * s), 1, 99))}</span></div>`).join('')}`,
-    foot: `<button class="btn" data-a="closeModal">閉じる</button><button class="btn pri" data-a="signFrn" data-id="${p.id}">獲得する</button>` };
+      <hr class="sep">${keys.map(k => `<div class="row sp"><span class="small">${ATTR_JP[k]}</span><span>${k === 'vel' ? Math.round(p.a.vel + (p.pr.noise.ovr * s * 0.3)) + 'km/h' : av(clamp(Math.round(p.a[k] + p.pr.noise.ovr * s), 1, 99))}</span></div>`).join('')}
+      <hr class="sep">${!isP(p) ? `<div class="row small" style="margin-bottom:6px">守れる位置：${POS_JP[p.pos]} ${subTags(p, { empty: '<span class="faint">ほかになし</span>' })}</div>` : ''}<div class="small muted" style="margin-bottom:4px">特殊能力</div>${p.pr.sc >= 50 ? skChips(p) : '<span class="faint small">調査50%以上で判明</span>'}`,
+    foot: `<button class="btn" data-a="closeModal">閉じる</button><button class="btn" data-a="peOpen" data-id="${p.id}">編集</button><button class="btn pri" data-a="signFrn" data-id="${p.id}">獲得する</button>` };
 }

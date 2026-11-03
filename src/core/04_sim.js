@@ -3,6 +3,7 @@
    ========================================================= */
 const LGC = { bb: .077, hbp: .008, k: .188, hr: .0195, babip: .290, err: .012, dbl: .20, tri: .020 };
 function nz(v) { return (v - 60) / 40; }
+const DEF_FX = { vsL: 0, vsLB: 0, bk: 1, bhr: 1, bab: 0, pk: 1, pbb: 1, phr: 1, pbab: 0, go: 0, nobi: 0, inf: false };
 const DEF_C = { con: 63, pow: 63, eye: 63, spd: 63, arm: 63, fld: 63, def: 63, stuff: 63, ctl: 63 };
 function nzk(v, k) { const C = G.simC || DEF_C; return (v - C[k]) / 40; }
 /* リーグ全体の水準を基準にする（能力が全体に上下しても得点環境が安定する） */
@@ -19,7 +20,7 @@ function computeSimCenter() {
   C.def = nt ? acc.def / nt : 63; C.stuff = np ? acc.stuff / np : 63; C.ctl = np ? acc.ctl / np : 63;
   G.simC = C;
 }
-function pitMax(p, isSP) { return isSP ? 68 + p.a.sta * 0.56 : 16 + p.a.sta * 0.36; }
+function pitMax(p, isSP) { const iron = skFx(p).iron; return isSP ? 68 + p.a.sta * 0.56 + (iron ? 10 : 0) : 16 + p.a.sta * 0.36 + (iron ? 6 : 0); }
 function parkHR(hid) { return isUser(hid) ? G.stad.hrF : G.teams[hid].stad.hrF; }
 function pcFor(r) {
   switch (r) { case 'K': return 4 + ri(0, 3); case 'BB': return 5 + ri(0, 2); case 'HBP': return 1 + ri(0, 3); default: return 1 + ri(0, 5); }
@@ -28,44 +29,60 @@ function relAvail(p, dayNo) {
   if (p.injW > 0) return false;
   const r = p.rel; if (!r) return true;
   if (r.last === dayNo) return false;
-  if (r.last === dayNo - 1 && (r.consec >= 3 || r.pc > 38)) return false;
+  const fx = skFx(p);
+  const lim = 3 + (fx.rec >= 2 ? 1 : 0) - (fx.rec <= -2 ? 1 : 0), pcl = 38 + fx.rec * 5 + (fx.iron ? 10 : 0);
+  if (r.last === dayNo - 1 && (r.consec >= lim || r.pc > pcl)) return false;
   return true;
 }
-function batEff(p, home, side) {
-  const a = p.a;
+/* sit：その打席の状況（risp＝得点圏に走者、wo＝サヨナラの場面） */
+function batEff(p, home, side, sit) {
+  const a = p.a; const fx = skFx(p);
   const f = (p.form || 0) * 2.5 + (p.mor - 50) * 0.04 - fatPen(p) * 0.6 + (p.adapt || 0) + (home ? 1.2 : 0) + side.tacB;
-  return { con: nzk(a.con + f, 'con'), pow: nzk(a.pow + f, 'pow'), eye: nzk(a.eye + f * 0.5, 'eye'), spd: nzk(a.spd, 'spd'), bats: p.bats };
+  let ac = fx.bcon, ap = 0;
+  if (sit && sit.risp && fx.chance) { ac += fx.chance * 0.035; ap += fx.chance * 0.03; }
+  if (sit && sit.wo && fx.wo) { ac += 0.08; ap += 0.08; }
+  return { con: nzk(a.con + f, 'con') + ac, pow: nzk(a.pow + f, 'pow') + ap, eye: nzk(a.eye + f * 0.5, 'eye'), spd: nzk(a.spd, 'spd'), bats: p.bats, fx };
 }
-function pitEff(ps, side) {
-  const p = ps.p, a = p.a;
+function pitEff(ps, side, sit, inn) {
+  const p = ps.p, a = p.a; const fx = skFx(p);
   const t = Math.max(0, (ps.pc - 0.78 * ps.maxP) / (0.45 * ps.maxP));
   const pen = Math.min(30, t * 22);
   const f = (p.form || 0) * 2.5 + (p.mor - 50) * 0.04 + (p.adapt || 0) + side.tacB;
   const vs = velScore(a.vel) - pen * 0.8 + f;
-  return { stuff: vs * 0.45 + (a.brk - pen + f) * 0.55, ctl: a.ctl - pen * 0.7 + f * 0.6, thr: p.thr };
+  let st = fx.st + fx.nobi * 0.03, ct = fx.ct;
+  if (sit && sit.risp && fx.pinch) st += fx.pinch * 0.04;
+  if (ps.r >= 2 && fx.tough) { st += fx.tough * 0.04; ct += fx.tough * 0.03; }
+  if (fx.late && inn >= 7) st += 0.06;
+  if (fx.slow && ps.isSP && inn <= 1) { st -= 0.08; ct -= 0.08; }
+  if (ps.shaky) ct -= 0.2;
+  if (side.catFx) { st += side.catFx * 0.025; ct += side.catFx * 0.02; }
+  return { stuff: vs * 0.45 + (a.brk - pen + f) * 0.55, ctl: a.ctl - pen * 0.7 + f * 0.6, thr: p.thr, fx, st, ct };
 }
 function simPA(b, pe, defN, park) {
-  const stuff = nzk(pe.stuff, 'stuff'), ctl = nzk(pe.ctl, 'ctl');
+  const bf = b.fx || DEF_FX, pf = pe.fx || DEF_FX;
   let con = b.con, pow = b.pow; const eye = b.eye, spd = b.spd;
   const bh = b.bats === 'S' ? (pe.thr === 'R' ? 'L' : 'R') : b.bats;
+  const stuff = nzk(pe.stuff, 'stuff') + (pe.st || 0) + (bh === 'L' ? pf.vsLB * 0.04 : 0), ctl = nzk(pe.ctl, 'ctl') + (pe.ct || 0);
   const pl = (bh !== pe.thr) ? 0.05 : -0.07;
   con += pl; pow += pl * 0.8;
-  const pBB = LGC.bb * Math.exp(0.45 * eye - 0.55 * ctl);
+  if (pe.thr === 'L' && bf.vsL) { con += bf.vsL * 0.03; pow += bf.vsL * 0.025; }
+  const pBB = LGC.bb * Math.exp(0.45 * eye - 0.55 * ctl) * pf.pbb;
   const pHBP = LGC.hbp * Math.exp(-0.25 * ctl);
-  const pK = LGC.k * Math.exp(-0.55 * con + 0.55 * stuff - 0.15 * eye);
-  const pHR = LGC.hr * Math.exp(1.35 * pow - 0.45 * stuff - 0.1 * ctl) * park;
+  const pK = LGC.k * Math.exp(-0.55 * con + 0.55 * stuff - 0.15 * eye) * bf.bk * pf.pk * (1 + pf.nobi * 0.02);
+  const pHR = LGC.hr * Math.exp(1.35 * pow - 0.45 * stuff - 0.1 * ctl - 0.05 * pf.nobi) * park * bf.bhr * pf.phr;
   let r = rnd();
   if ((r -= pBB) < 0) return 'BB';
   if ((r -= pHBP) < 0) return 'HBP';
   if ((r -= pK) < 0) return 'K';
   if ((r -= pHR) < 0) return 'HR';
   if (rnd() < LGC.err * (1 - 0.5 * defN)) return 'E';
-  const babip = LGC.babip * (1 + 0.16 * con + 0.05 * spd - 0.10 * stuff - 0.07 * defN);
+  const babip = LGC.babip * (1 + 0.16 * con + 0.05 * spd - 0.10 * stuff - 0.07 * defN) + bf.bab + pf.pbab;
   if (rnd() < babip) {
     const r2 = rnd(); const tri = LGC.tri * (1 + 0.8 * spd); const dbl = LGC.dbl * (1 + 0.6 * pow + 0.1 * spd);
     if (r2 < tri) return '3B'; if (r2 < tri + dbl) return '2B'; return '1B';
   }
-  return rnd() < (0.48 - 0.10 * pow) ? 'GO' : 'FO';
+  if (rnd() < (0.48 - 0.10 * pow + pf.go)) return bf.inf && rnd() < clamp(0.06 + 0.05 * spd, 0.02, 0.12) ? '1B' : 'GO';
+  return 'FO';
 }
 
 function pickStarter(tid, roles, dayNo) {
@@ -86,8 +103,8 @@ function restTired(tid, lu) {
   const bench = rosterLv(tid, 1).filter(p => !isP(p) && p.injW === 0 && !inLu.has(p.id));
   return lu.map(x => {
     if (x.p.fat >= 78 && chance(0.7) && bench.length) {
-      const rep = maxBy(bench, p => slotScore(p, x.pos) + (x.pos === 'C' && p.pos !== 'C' ? -40 : 0));
-      if (rep && slotScore(rep, x.pos) > slotScore(x.p, x.pos) - 25 && (x.pos !== 'C' || rep.pos === 'C')) {
+      const rep = maxBy(bench, p => slotScore(p, x.pos) + (x.pos === 'C' && !canCatch(p) ? -40 : 0));
+      if (rep && slotScore(rep, x.pos) > slotScore(x.p, x.pos) - 25 && (x.pos !== 'C' || canCatch(rep))) {
         bench.splice(bench.indexOf(rep), 1); return { p: rep, pos: x.pos };
       }
     }
@@ -104,16 +121,23 @@ function setupSide(tid, idx, S) {
   const mgr = teamMgr(tid);
   const anaLv = isUser(tid) ? G.tfac.analytics.lv : (G.teams[tid].facLv || 2);
   const tacB = nz(mgr.tac) * 1.5 + anaLv * 0.25;
-  if (ctx.rec) for (const x of lu) { const st = x.p.st; st.g++; st.pos[x.pos] = (st.pos[x.pos] || 0) + 1; x.p.wkG++; }
+  if (ctx.rec) for (const x of lu) {
+    const st = x.p.st; st.g++; st.pos[x.pos] = (st.pos[x.pos] || 0) + 1; x.p.wkG++;
+    const k = subKey(x.pos);
+    if (x.pos !== 'DH' && k !== x.p.pos) { const lv = addSubXp(x.p, k, 1); if (lv) subLearned(x.p, k, lv); }
+  }
   const catcher = (lu.find(x => x.pos === 'C') || lu[0]).p;
+  const ofx = lu.filter(x => x.pos === 'LF' || x.pos === 'CF' || x.pos === 'RF').map(x => skFx(x.p));
+  const armAdj = ofx.some(f => f.laser) ? -0.08 : ofx.reduce((a, f) => a - f.thr * 0.01, 0);
   return {
     tid, idx, lu, bi: 0, roles, sp, ps: null, used: [], usedIds: new Set(), defN: nzk(teamDefense(lu), 'def'), tacB, style: mgr.style,
+    catFx: catcher && catcher.pos === 'C' ? skFx(catcher).cat : 0, armAdj,
     box: ctx.box ? { bat: lu.map(x => ({ id: x.p.id, pos: x.pos, ab: 0, r: 0, h: 0, rbi: 0, bb: 0, so: 0, hr: 0, d: 0, t: 0, sb: 0 })) } : null,
     catcher, h: 0, e: 0
   };
 }
 function newPS(p, isSP, S, side) {
-  return { p, isSP, pc: 0, outs: 0, h: 0, r: 0, er: 0, bb: 0, hbp: 0, so: 0, hr: 0, bf: 0, inRuns: 0, maxP: pitMax(p, isSP),
+  return { p, isSP, pc: 0, outs: 0, h: 0, r: 0, er: 0, bb: 0, hbp: 0, so: 0, hr: 0, bf: 0, inRuns: 0, maxP: pitMax(p, isSP), shaky: skFx(p).shaky && rnd() < 0.12,
     entryLead: S.score[side.idx] - S.score[1 - side.idx], entryInn: S.inn, long: false, exitLead: null, hold: false };
 }
 function boxLine(side, id) { if (!side.box) return null; return side.box.bat.find(b => b.id === id) || null; }
@@ -192,13 +216,14 @@ function chooseReliever(S, def, lead, long) {
 }
 
 function stealTry(S, off, def, runner) {
-  const sp = nzk(runner.p.a.spd, 'spd') + 0.08;
+  const rf = skFx(runner.p), qf = def.ps ? skFx(def.ps.p).quick : 0;
+  const sp = nzk(runner.p.a.spd, 'spd') + 0.08 + rf.steal * 0.04;
   if (sp < 0) return 0;
   const style = off.style === '機動力型' ? 1.5 : 1;
-  const att = (0.06 + 0.26 * sp) * style * (S.ctx.post ? 0.8 : 1);
+  const att = (0.06 + 0.26 * sp) * style * (S.ctx.post ? 0.8 : 1) * (1 + rf.steal * 0.12) * (rf.thief ? 1.4 : 1) * (1 - qf * 0.08);
   if (rnd() >= att) return 0;
   const arm = nzk(def.catcher.a.arm, 'arm');
-  const ok = rnd() < clamp(0.68 + 0.18 * sp - 0.12 * arm, 0.4, 0.93);
+  const ok = rnd() < clamp(0.68 + 0.18 * sp - 0.12 * arm + rf.steal * 0.025 - qf * 0.04, 0.4, 0.95);
   if (S.ctx.rec) { if (ok) runner.p.st.sb++; else runner.p.st.cs++; }
   const bl = boxLine(off, runner.p.id); if (bl && ok) bl.sb++;
   return ok ? 1 : -1;
@@ -217,11 +242,12 @@ function recordError(S, def) {
   const W = { C: 6, '1B': 8, '2B': 16, '3B': 18, SS: 22, LF: 9, CF: 10, RF: 9 };
   const cands = def.lu.filter(x => W[x.pos]);
   if (!cands.length) return;
-  const f = wpick(cands, x => W[x.pos] * (110 - x.p.a.fld) / 50);
+  const f = wpick(cands, x => W[x.pos] * (110 - x.p.a.fld) / 50 * skFx(x.p).err * (1 - skFx(x.p).thr * 0.06));
   if (S.ctx.rec) f.p.st.e++;
 }
-function hitAdvance(type, B, outs, bat, ps, scoreRun) {
-  const sp = x => nzk(x.p.a.spd, 'spd');
+function hitAdvance(type, B, outs, bat, ps, scoreRun, arm) {
+  arm = arm || 0;
+  const sp = x => nzk(x.p.a.spd, 'spd') + skFx(x.p).run * 0.1 + arm * 4;
   if (type === '3B') { for (let i = 2; i >= 0; i--) if (B[i]) { scoreRun(B[i], bat, true); B[i] = null; } B[2] = { p: bat, rp: ps, er: true }; return; }
   if (type === '2B') {
     if (B[2]) { scoreRun(B[2], bat, true); B[2] = null; }
@@ -273,7 +299,7 @@ function halfInning(S, off, def, half) {
       ps.pc += ri(2, 4); ps.bf++;
       if (rec) st.pa++;
       outs++; ps.outs++;
-      if (rnd() < 0.82) {
+      if (rnd() < 0.82 + skFx(bat).bunt) {
         if (rec) st.sh++;
         if (B[1]) { B[2] = B[1]; B[1] = null; }
         B[1] = B[0]; B[0] = null;
@@ -284,7 +310,8 @@ function halfInning(S, off, def, half) {
       }
       continue;
     }
-    const r = simPA(batEff(bat, half === 1, off), pitEff(ps, def), def.defN, S.park);
+    const sit = { risp: !!(B[1] || B[2]), wo: half === 1 && S.inn >= 9 && S.score[1] - S.score[0] <= 0 && S.score[1] - S.score[0] >= -1 };
+    const r = simPA(batEff(bat, half === 1, off, sit), pitEff(ps, def, sit, S.inn), def.defN + (skFx(ps.p).tempo ? 0.08 : 0), S.park);
     ps.pc += pcFor(r); ps.bf++;
     if (rec) st.pa++;
     let desc = '';
@@ -312,7 +339,7 @@ function halfInning(S, off, def, half) {
         if (rec) { st.ab++; st.h++; if (r === '2B') st.d++; if (r === '3B') st.t++; }
         ps.h++; off.h++;
         if (bl) { bl.ab++; bl.h++; if (r === '2B') bl.d++; if (r === '3B') bl.t++; }
-        hitAdvance(r, B, outs, bat, ps, scoreRun);
+        hitAdvance(r, B, outs, bat, ps, scoreRun, def.armAdj);
         desc = r === '1B' ? 'タイムリーヒット' : r === '2B' ? 'タイムリーツーベース' : 'タイムリースリーベース';
         break;
       }
@@ -328,7 +355,7 @@ function halfInning(S, off, def, half) {
       }
       case 'GO': {
         if (rec) st.ab++; if (bl) bl.ab++;
-        if (B[0] && outs < 2 && rnd() < clamp(0.52 - 0.22 * nzk(bat.a.spd, 'spd'), 0.2, 0.7)) {
+        if (B[0] && outs < 2 && rnd() < clamp(0.52 - 0.22 * nzk(bat.a.spd, 'spd') + skFx(bat).gdp, 0.2, 0.75)) {
           if (rec) st.gdp++;
           outs += 2; ps.outs += 2; B[0] = null;
           if (outs < 3) { if (B[2]) { scoreRun(B[2], bat, false); B[2] = null; } if (B[1]) { B[2] = B[1]; B[1] = null; } }

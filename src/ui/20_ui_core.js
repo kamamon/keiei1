@@ -1,6 +1,7 @@
 /* =========================================================
    画面の土台：描画・イベント・モーダル・表・グラフ
    ========================================================= */
+const DOC_TITLE = '球団社長 プロ野球経営シミュレーション';
 const UI = { screen: 'title', tab: {}, sort: {}, modal: null, mq: [], navOpen: false, busy: null, sel: {}, flip: false, lastDate: '',
   title: { step: 0, team: null, name: '', nick: '', policy: 'balance' }, f: {} };
 const ACT = {};
@@ -65,7 +66,7 @@ function table(id, cols, rows, o) {
   if (o.limit) rs = rs.slice(0, o.limit);
   if (!rs.length) return `<div class="empty">${o.empty || '該当する項目はありません'}</div>`;
   const th = cols.map(c => `<th class="${c.num ? 'num' : ''} ${c.v ? 'sortable' : ''} ${st && st.k === c.k ? 'sorted' : ''}" ${c.v ? `data-a="sort" data-t="${id}" data-k="${c.k}"` : ''} ${c.title ? `title="${esc(c.title)}"` : ''}>${c.l}${st && st.k === c.k ? (st.d ? '↓' : '↑') : ''}</th>`).join('');
-  const tr = rs.map(r => `<tr class="${o.rowCls ? o.rowCls(r) : ''}">${cols.map(c => `<td class="${c.num ? 'num' : ''} ${c.cls || ''}">${c.h ? c.h(r) : esc(c.v ? c.v(r) : '')}</td>`).join('')}</tr>`).join('');
+  const tr = rs.map(r => `<tr class="${o.rowCls ? o.rowCls(r) : ''}"${o.rowAttr ? ' ' + o.rowAttr(r) : ''}>${cols.map(c => `<td class="${c.num ? 'num' : ''} ${c.cls || ''}">${c.h ? c.h(r) : esc(c.v ? c.v(r) : '')}</td>`).join('')}</tr>`).join('');
   return `<div class="tw" ${o.maxH ? `style="max-height:${o.maxH}px;overflow-y:auto"` : ''}><table class="t ${o.compact ? 'compact' : ''}"><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table></div>`;
 }
 ACT.sort = el => { const id = el.dataset.t, k = el.dataset.k; const cur = UI.sort[id]; UI.sort[id] = cur && cur.k === k ? { k, d: !cur.d } : { k, d: true }; render(); };
@@ -109,7 +110,7 @@ const NAV = [
   { g: '編成', items: [['contracts', '契約・年俸'], ['fa', 'FA市場'], ['trade', 'トレード'], ['foreign', '外国人・トライアウト'], ['scout', 'スカウト'], ['draft', 'ドラフト会議']] },
   { g: '組織', items: [['staff', 'スタッフ']] },
   { g: '経営', items: [['finance', '財務・予算'], ['stadium', '球場・設備'], ['sponsor', 'スポンサー・命名権'], ['fans', 'ファン・広報'], ['town', '街づくり'], ['plan', '中長期計画']] },
-  { g: '記録', items: [['records', '球団史・記録'], ['news', 'ニュース'], ['system', 'セーブ・設定']] }
+  { g: '記録', items: [['records', '球団史・記録'], ['news', 'ニュース'], ['notes', 'お知らせ'], ['edit', '選手の編集'], ['system', 'セーブ・設定']] }
 ];
 function navBadge(k) {
   const t = curTurn();
@@ -118,6 +119,7 @@ function navBadge(k) {
   if (k === 'fa' && ((G.compPending && G.compPending.length) || (t >= 41 && t <= 43 && G.faMarket.some(f => !f.done)))) return G.compPending.length ? '!' : G.faMarket.filter(f => !f.done).length;
   if (k === 'home' && G.pending.length) return G.pending.length;
   if (k === 'sponsor' && (G.sponsors.offers.length || G.naming.offers.length)) return G.sponsors.offers.length + G.naming.offers.length;
+  if (k === 'notes') return unreadNotes();
   return 0;
 }
 function renderNav() {
@@ -143,7 +145,7 @@ function renderHeader() {
       <div class="rd"><span class="rk">オーナー信頼</span><span class="rv ${G.owner.trust < 25 ? 'neg' : ''}">${Math.round(G.owner.trust)}</span></div>
       <div class="rd"><span class="rk">観客平均</span><span class="rv">${G.fin.att.g ? comma(G.fin.att.tot / G.fin.att.g) : '―'}</span></div>
     </div>
-    <div class="sb-go"><button class="go" data-a="next" ${UI.busy ? 'disabled' : ''}>次の週へ</button><button class="go2" data-a="nextMenu" aria-label="まとめて進める" ${UI.busy ? 'disabled' : ''}>▾</button></div>
+    <div class="sb-go">${bellBtn()}<button class="go" data-a="next" ${UI.busy ? 'disabled' : ''}>次の週へ</button><button class="go2" data-a="nextMenu" aria-label="まとめて進める" ${UI.busy ? 'disabled' : ''}>▾</button></div>
   </header>`;
 }
 function renderScreen() { const f = SCREENS[UI.screen] || SCREENS.home; try { return f(); } catch (e) { console.error(e); return `<div class="panel"><div class="panel-b">画面の表示中にエラーが発生しました：${esc(e.message)}</div></div>`; } }
@@ -158,13 +160,16 @@ function render() {
 function renderNow() {
   const app = document.getElementById('app');
   applyTheme();
-  if (!G || UI.screen === 'title') { app.innerHTML = SCREENS.title(); renderModalRoot(); if (UI.resetScroll) { window.scrollTo(0, 0); UI.resetScroll = false; } return; }
+  if (!G || UI.screen === 'title') { document.title = DOC_TITLE; app.innerHTML = SCREENS.title(); renderModalRoot(); if (UI.resetScroll) { window.scrollTo(0, 0); UI.resetScroll = false; } return; }
+  const un = unreadNotes(); document.title = (un ? `(${un}) ` : '') + DOC_TITLE;
   const y = window.scrollY;
   app.innerHTML = renderHeader() + `<div class="wrap">${renderNav()}${UI.navOpen ? '<div class="navback" data-a="menu"></div>' : ''}<main class="main" id="main">${renderScreen()}</main></div>`;
   renderModalRoot();
   if (!UI.resetScroll) window.scrollTo(0, y); else { window.scrollTo(0, 0); UI.resetScroll = false; }
 }
-function go(screen, tab) { UI.screen = screen; if (tab) UI.tab[screen] = tab; UI.navOpen = false; UI.resetScroll = true; closeAllModals(); render(); try { history.replaceState(null, '', '#' + screen); } catch (e) { } }
+/* 画面を開くときに一度だけ行う処理（お知らせを既読にするなど） */
+const ON_GO = {};
+function go(screen, tab) { UI.screen = screen; if (tab) UI.tab[screen] = tab; UI.navOpen = false; UI.resetScroll = true; closeAllModals(); if (ON_GO[screen]) ON_GO[screen](); render(); try { history.replaceState(null, '', '#' + screen); } catch (e) { } }
 ACT.nav = el => go(el.dataset.v);
 ACT.go = el => go(el.dataset.v, el.dataset.tab);
 ACT.menu = () => { UI.navOpen = !UI.navOpen; render(); };
@@ -186,7 +191,9 @@ function renderModalRoot() {
   }
   if (!m) { root.innerHTML = ''; document.body.style.overflow = ''; return; }
   const same = UI.lastModal === UI.modal; UI.lastModal = UI.modal;
-  root.innerHTML = `<div class="mback" data-a="mback"><div class="modal ${m.size || ''}${same ? ' still' : ''}" role="dialog" aria-modal="true" aria-label="${esc(m.title)}"><div class="modal-h"><h3>${m.title}</h3><button class="x" data-a="closeModal" aria-label="閉じる">×</button></div><div class="modal-b">${m.body}</div>${m.foot ? `<div class="modal-f">${m.foot}</div>` : ''}</div></div>`;
+  const back0 = root.querySelector('.mback'); const keep = same && back0 ? back0.scrollTop : 0;
+  root.innerHTML = `<div class="mback" data-a="mback"><div class="modal ${m.size || ''}${same ? ' still' : ''}" role="dialog" aria-modal="true" aria-label="${esc(String(m.title).replace(/<[^>]*>/g, ''))}"><div class="modal-h"><h3>${m.title}</h3><button class="x" data-a="closeModal" aria-label="閉じる">×</button></div><div class="modal-b">${m.body}</div>${m.foot ? `<div class="modal-f">${m.foot}</div>` : ''}</div></div>`;
+  if (keep) root.querySelector('.mback').scrollTop = keep;
   document.body.style.overflow = 'hidden';
 }
 ACT.closeModal = () => { closeModal(); render(); };
