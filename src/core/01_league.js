@@ -6,13 +6,21 @@
 const LG_NPB = {
   mode: 'npb', mlb: false, name: '日本プロ野球', sub: 'プロ野球経営シミュレーション', teams: 12, games: 143, dpw: 6, weekend: [3, 4, 5],
   dayAtt: [0.80, 0.80, 0.84, 1.0, 1.20, 1.14], rot: 6, rest: 6, nrp: 8, nbat: 15, maxInn: 12, maxInnPost: 15, ghost: false,
-  draftT: 39, asgT: 27, postEnd: 38, faYears: 8, maxYrs: 5, salK: 1, hofWait: 3, hofYears: 15,
+  draftT: 39, asgT: 27, postEnd: 38, faYears: 8, maxYrs: 5, salK: 1, hofWait: 3, hofYears: 15, velAdd: 0,
   champ: '日本一', series: 'グランドシリーズ', aceAward: 'ゴールデンアーム賞', glove: 'ゴールデングラブ賞'
 };
 const LG_MLB = {
   mode: 'mlb', mlb: true, name: 'メジャーリーグ', sub: 'メジャーリーグ経営シミュレーション', teams: 30, games: 162, dpw: 7, weekend: [4, 5, 6],
   dayAtt: [0.78, 0.80, 0.80, 0.86, 1.02, 1.20, 1.12], rot: 5, rest: 5, nrp: 8, nbat: 13, maxInn: 25, maxInnPost: 25, ghost: true,
   draftT: 26, asgT: 26, postEnd: 39, faYears: 6, arbYears: 3, maxYrs: 10, salK: 2.2, hofWait: 5, hofYears: 10,
+  /* 球速：メジャーは日本より5キロほど速い（速球の平均はおよそ151キロ＝94マイル、救援の速球派は160キロ＝100マイル超え）。
+     能力の評価（総合力・球速のバー）はリーグの水準に合わせるので、同じ評価でも数字が velAdd だけ大きい */
+  velAdd: 5,
+  /* 得点環境：球が速いぶん三振が多く、本塁打も多い（三振率22〜23%・本塁打は1打席あたり約3%・平均防御率4点前後）。
+     本塁打はふつうの打者ほど日本より多く、強打者どうしの差は日本ほど開かない（hrB：パワーの効き方） */
+  sim: { k: .212, hr: .0285, hrB: 0.95, bb: .080, era0: 4.0 },
+  /* 先発の球数のめど：72＋スタミナ×0.34（スタミナ90でおよそ100球）。日本版は 68＋スタミナ×0.56 */
+  spPit: [72, 0.34],
   champ: 'ワールドチャンピオン', series: 'ワールドシリーズ', aceAward: '最優秀投手賞', glove: '最優秀守備賞',
   divs: ['東地区', '中地区', '西地区'],
   /* ぜいたく税：基準額（2億4400万ドル）を超えた分に課税。連続で超えるほど税率が上がる */
@@ -188,6 +196,7 @@ function setLeague(mode) {
   PERS.mlb = lgCopy(src.PERS_mlb);
   for (const k in src.GOALS) Object.assign(GOALS[k], src.GOALS[k]);
   LG = Object.assign({ ready: true }, mode === 'mlb' ? LG_MLB : LG_NPB);
+  setSimEnv();
   if (G && G.teams) for (const T of G.teams) { T._roles = null; T._lu = null; }
 }
 function isMLB() { return !!LG.mlb; }

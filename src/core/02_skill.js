@@ -156,16 +156,16 @@ function genSkills(p, boost) {
     has('error', a.fld <= 45 ? .35 : a.fld <= 52 ? .15 : .03);
   } else {
     const stf = velScore(a.vel) * 0.45 + a.brk * 0.55;
-    lvG('pinch', 0.05 + boost * 0.6); lvG('vsLB', p.thr === 'L' ? 0.3 : 0); lvG('nobi', (a.vel - 148) / 7); lvG('quick', 0); lvG('tough', 0);
+    lvG('pinch', 0.05 + boost * 0.6); lvG('vsLB', p.thr === 'L' ? 0.3 : 0); lvG('nobi', (a.vel - 148 - velOff()) / 7); lvG('quick', 0); lvG('tough', 0);
     lvG('recover', p.pt === 'RP' ? 0.3 : 0);
     has('kk', stf >= 75 ? .45 : stf >= 66 ? .2 : .03);
     has('kire', a.brk >= 78 ? .4 : a.brk >= 68 ? .15 : .03);
-    has('heavy', a.vel >= 152 ? .2 : .06);
+    has('heavy', a.vel >= 152 + velOff() ? .2 : .06);
     has('lowball', a.ctl >= 75 ? .35 : a.ctl >= 65 ? .14 : .03);
     if (p.pt === 'SP') { has('late', .1); has('slow', .1); }
     has('holdball', .08); has('tempo', .07);
     has('walk', a.ctl <= 45 ? .45 : a.ctl <= 55 ? .2 : .03);
-    has('hrX', a.vel < 142 ? .2 : .08); has('light', .07); has('shaky', a.ctl <= 50 ? .15 : .04);
+    has('hrX', a.vel < 142 + velOff() ? .2 : .08); has('light', .07); has('shaky', a.ctl <= 50 ? .15 : .04);
   }
   has('mood', p.per === 'leader' ? .5 : p.per === 'passion' ? .15 : .04);
   has('moodX', p.per === 'money' ? .07 : .02);
@@ -251,7 +251,7 @@ function skGainCand(p) {
   } else {
     const stf = velScore(a.vel) * 0.45 + a.brk * 0.55;
     if (stf >= 62) add('kk', stf - 55); if (a.brk >= 64) add('kire', a.brk - 58); if (a.ctl >= 62) add('lowball', a.ctl - 56);
-    if (a.vel >= 147) add('heavy', 8); add('holdball', 5); add('tempo', 4); if (p.pt === 'SP') add('late', 4);
+    if (a.vel >= 147 + velOff()) add('heavy', 8); add('holdball', 5); add('tempo', 4); if (p.pt === 'SP') add('late', 4);
   }
   add('mood', p.per === 'leader' ? 12 : 2);
   return c.length ? wpick(c, x => x[1])[0] : null;

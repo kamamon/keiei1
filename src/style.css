@@ -533,3 +533,4 @@ table.t tr.div1 td:first-child { color: var(--lamp); font-weight: 700; }
 .dorder span.me { background: var(--team-soft); border-color: var(--team); font-weight: 700; }
 .teamgrid.t5 { grid-template-columns: repeat(auto-fill, minmax(205px, 1fr)); }
 table.t.twrap td { white-space: normal; } table.t.twrap td:first-child { white-space: nowrap; vertical-align: top; }
+.vmph { display: block; line-height: 1.15; }

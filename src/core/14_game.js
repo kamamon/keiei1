@@ -55,6 +55,7 @@ function genRoster(T) {
   }
 }
 function normalizeTeam(T, target) {
+  const V = velOff();
   for (let it = 0; it < 3; it++) {
     autoRoster(T.id);
     const f1 = rosterLv(T.id, 1);
@@ -63,7 +64,7 @@ function normalizeTeam(T, target) {
     for (const p of roster(T.id)) {
       if (p.lv === 3) continue;
       for (const k in p.a) {
-        if (k === 'vel') { p.a.vel = clamp(p.a.vel + d * 0.35, 120, 164); p.cap.vel = Math.max(p.a.vel, clamp(p.cap.vel + d * 0.35, 120, 165)); }
+        if (k === 'vel') { p.a.vel = clamp(p.a.vel + d * 0.35, 120 + V, 164 + V); p.cap.vel = Math.max(p.a.vel, clamp(p.cap.vel + d * 0.35, 120 + V, 165 + V)); }
         else { p.a[k] = clamp(p.a[k] + d, 5, 99); p.cap[k] = Math.max(p.a[k], clamp(p.cap[k] + d, 5, 99)); }
       }
     }
@@ -74,25 +75,26 @@ function normalizeTeam(T, target) {
 function synthCareer(p) {
   const yrs = p.frn ? 0 : p.svc; if (!yrs) return;
   const c = p.car; const o = ovr(p); const f = clamp((o - 42) / 26, 0.15, 1.15) * (LG.games || 143) / 143;
+  const kM = LGC.k / LGC_BASE.k, hrM = LGC.hr / LGC_BASE.hr, era0 = LGC.era0 || 3.7;   // リーグの得点環境に合わせる
   let w = 0;
   for (let y = 0; y < yrs; y++) {
     const ff = f * rf(0.6, 1.1) * (y < 2 ? 0.5 : 1);
     if (isP(p)) {
       const sp = p.pt === 'SP';
-      const outs = Math.round((sp ? 420 : 160) * ff); const era = clamp(3.7 - (o - 60) * 0.06 + rn(0, 0.5), 1.2, 7);
+      const outs = Math.round((sp ? 420 : 160) * ff); const era = clamp(era0 - (o - 60) * 0.06 + rn(0, 0.5), 1.2, 7);
       const er = Math.round(era * outs / 27);
       c.g += sp ? Math.round(22 * ff) : Math.round(45 * ff); c.gs += sp ? Math.round(22 * ff) : 0; c.outs += outs; c.er += er; c.r += Math.round(er * 1.08);
-      c.so += Math.round(outs / 3 * (0.75 + (velScore(p.a.vel) - 55) * 0.008)); c.bb += Math.round(outs / 3 * 0.33); c.h += Math.round(outs / 3 * 0.9); c.hr += Math.round(outs / 3 * 0.08);
+      c.so += Math.round(outs / 3 * (0.75 + (velScore(p.a.vel) - 55) * 0.008) * kM); c.bb += Math.round(outs / 3 * 0.33); c.h += Math.round(outs / 3 * 0.9); c.hr += Math.round(outs / 3 * 0.08 * hrM);
       if (sp) { c.w += Math.round(9 * ff + (o - 60) * 0.12); c.l += Math.round(7 * ff); }
       else { c.w += Math.round(3 * ff); c.l += Math.round(3 * ff); c.hld += Math.round(14 * ff); if (rpOvr(p) >= 68) c.sv += Math.round(18 * ff); }
-      w += (3.7 + 1.0 - era) * outs / 27 / 10;
+      w += (era0 + 1.0 - era) * outs / 27 / 10;
     } else {
       const pa = Math.round(500 * ff); const ab = Math.round(pa * 0.89);
       const av = clamp(0.245 + (p.a.con - 60) * 0.0018 + rn(0, 0.015), 0.18, 0.34);
-      const hr = Math.round(pa * 0.021 * Math.exp(1.35 * nz(p.a.pow)) * rf(0.7, 1.2));
+      const hr = Math.round(pa * 0.021 * hrM * Math.exp(LGC.hrB * nz(p.a.pow)) * rf(0.7, 1.2));
       const h = Math.round(ab * av);
       c.g += Math.round(125 * ff); c.pa += pa; c.ab += ab; c.h += h; c.hr += hr; c.d += Math.round(h * 0.18); c.t += Math.round(h * 0.02);
-      c.rbi += Math.round(hr * 3 + h * 0.25); c.r += Math.round(h * 0.42); c.bb += Math.round(pa * 0.08); c.so += Math.round(pa * 0.19); c.sb += Math.round(pa * 0.03 * Math.max(0, nz(p.a.spd) + 0.5));
+      c.rbi += Math.round(hr * 3 + h * 0.25); c.r += Math.round(h * 0.42); c.bb += Math.round(pa * 0.08); c.so += Math.round(pa * 0.19 * kM); c.sb += Math.round(pa * 0.03 * Math.max(0, nz(p.a.spd) + 0.5));
       w += (o - 50) / 9 * ff;
     }
   }
@@ -130,7 +132,7 @@ function newGame(o) {
     v: 1, year: y0, startYear: y0, month: 1, week: 1, nid: 1, sid: 1, gid: 1, dayNo: 0, stamp: 0,
     teams: [], players: {}, staff: {}, staffPool: [], prospects: [], foreign: [], fapool: [], faMarket: [], compPending: [],
     news: [], pending: [], evCool: {}, boxes: {}, boxOrder: [], hist: { seasons: [], user: [] }, legends: [], retiredCoaches: [], mlb: [], trades: [],
-    flags: {}, post: null, draft: null, sched: null, day: 0, weekly: null, gameOver: null, notes: [], noteSeq: 0, mlbTry: [], mlbAway: [], mode: LG.mode
+    flags: {}, post: null, draft: null, sched: null, day: 0, weekly: null, gameOver: null, notes: [], noteSeq: 0, mlbTry: [], mlbAway: [], mode: LG.mode, velV: 1
   };
   const defs = TEAM_DEFS.map(d => Object.assign({}, d));
   if (C) applyCustomDef(defs[o.team], C);
@@ -587,6 +589,8 @@ function migrateSave() {
   if (!G.recs) seedHistory(true);
   if (G.user) { if (G.user.noteStop == null) G.user.noteStop = true; if (G.user.noteToast == null) G.user.noteToast = true; if (G.user.osNote == null) G.user.osNote = false; }
   const all = Object.values(G.players).concat(G.prospects || [], G.foreign || [], G.mlbAway.map(m => m.p));
+  // 球速の水準をリーグに合わせる前のセーブ（メジャー版は日本より速い）
+  if (!G.velV) { const dv = LG.velAdd || 0; if (dv) for (const p of all) if (isP(p) && p.a && p.a.vel != null) { p.a.vel += dv; if (p.cap && p.cap.vel != null) p.cap.vel += dv; } G.velV = 1; }
   for (const p of all) {
     if (!p.sub || !p.sx) genSubs(p);
     if (!p.sk) genSkills(p, p.gen ? 1 : 0);

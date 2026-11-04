@@ -546,6 +546,7 @@ table.t tr.div1 td:first-child { color: var(--lamp); font-weight: 700; }
 .dorder span.me { background: var(--team-soft); border-color: var(--team); font-weight: 700; }
 .teamgrid.t5 { grid-template-columns: repeat(auto-fill, minmax(205px, 1fr)); }
 table.t.twrap td { white-space: normal; } table.t.twrap td:first-child { white-space: nowrap; vertical-align: top; }
+.vmph { display: block; line-height: 1.15; }
 
 </style>
 </head>
@@ -986,13 +987,21 @@ const CUSTOM_LAND = { few: { n: '少ない', d: '球場の両隣だけ' }, norma
 const LG_NPB = {
   mode: 'npb', mlb: false, name: '日本プロ野球', sub: 'プロ野球経営シミュレーション', teams: 12, games: 143, dpw: 6, weekend: [3, 4, 5],
   dayAtt: [0.80, 0.80, 0.84, 1.0, 1.20, 1.14], rot: 6, rest: 6, nrp: 8, nbat: 15, maxInn: 12, maxInnPost: 15, ghost: false,
-  draftT: 39, asgT: 27, postEnd: 38, faYears: 8, maxYrs: 5, salK: 1, hofWait: 3, hofYears: 15,
+  draftT: 39, asgT: 27, postEnd: 38, faYears: 8, maxYrs: 5, salK: 1, hofWait: 3, hofYears: 15, velAdd: 0,
   champ: '日本一', series: 'グランドシリーズ', aceAward: 'ゴールデンアーム賞', glove: 'ゴールデングラブ賞'
 };
 const LG_MLB = {
   mode: 'mlb', mlb: true, name: 'メジャーリーグ', sub: 'メジャーリーグ経営シミュレーション', teams: 30, games: 162, dpw: 7, weekend: [4, 5, 6],
   dayAtt: [0.78, 0.80, 0.80, 0.86, 1.02, 1.20, 1.12], rot: 5, rest: 5, nrp: 8, nbat: 13, maxInn: 25, maxInnPost: 25, ghost: true,
   draftT: 26, asgT: 26, postEnd: 39, faYears: 6, arbYears: 3, maxYrs: 10, salK: 2.2, hofWait: 5, hofYears: 10,
+  /* 球速：メジャーは日本より5キロほど速い（速球の平均はおよそ151キロ＝94マイル、救援の速球派は160キロ＝100マイル超え）。
+     能力の評価（総合力・球速のバー）はリーグの水準に合わせるので、同じ評価でも数字が velAdd だけ大きい */
+  velAdd: 5,
+  /* 得点環境：球が速いぶん三振が多く、本塁打も多い（三振率22〜23%・本塁打は1打席あたり約3%・平均防御率4点前後）。
+     本塁打はふつうの打者ほど日本より多く、強打者どうしの差は日本ほど開かない（hrB：パワーの効き方） */
+  sim: { k: .212, hr: .0285, hrB: 0.95, bb: .080, era0: 4.0 },
+  /* 先発の球数のめど：72＋スタミナ×0.34（スタミナ90でおよそ100球）。日本版は 68＋スタミナ×0.56 */
+  spPit: [72, 0.34],
   champ: 'ワールドチャンピオン', series: 'ワールドシリーズ', aceAward: '最優秀投手賞', glove: '最優秀守備賞',
   divs: ['東地区', '中地区', '西地区'],
   /* ぜいたく税：基準額（2億4400万ドル）を超えた分に課税。連続で超えるほど税率が上がる */
@@ -1168,6 +1177,7 @@ function setLeague(mode) {
   PERS.mlb = lgCopy(src.PERS_mlb);
   for (const k in src.GOALS) Object.assign(GOALS[k], src.GOALS[k]);
   LG = Object.assign({ ready: true }, mode === 'mlb' ? LG_MLB : LG_NPB);
+  setSimEnv();
   if (G && G.teams) for (const T of G.teams) { T._roles = null; T._lu = null; }
 }
 function isMLB() { return !!LG.mlb; }
@@ -1182,7 +1192,7 @@ function rankStr(r) { return r ? (LG.mlb ? '地区' + r + '位' : r + '位') : '
 
 /* =========================================================
    選手：生成・能力・評価・年俸
-   能力は1〜100（60が1軍平均）。球速のみkm/h
+   能力は1〜100（60が1軍平均）。球速のみkm/h（メジャー版は LG.velAdd だけ速い水準）
    ========================================================= */
 const BAT_KEYS = ['con', 'pow', 'eye', 'spd', 'arm', 'fld'];
 const PIT_KEYS = ['vel', 'ctl', 'brk', 'sta'];
@@ -1200,7 +1210,9 @@ const ARCH = {
 };
 
 function isP(p) { return p.pos === 'P'; }
-function velScore(v) { return clamp((v - 122) * 2.5, 0, 100); }
+/* 球速の水準のずれ（日本版0・メジャー版+5キロ）。評価はリーグの水準に合わせる */
+function velOff() { return LG.velAdd || 0; }
+function velScore(v) { return clamp((v - 122 - (LG.velAdd || 0)) * 2.5, 0, 100); }
 function batOvr(a, pos) {
   const off = a.con * .40 + a.pow * .36 + a.eye * .12 + a.spd * .12;
   const def = a.fld * .65 + a.arm * .35;
@@ -1290,12 +1302,12 @@ function genAttrs(p, cur, pot) {
   pot = Math.max(pot, cur);
   const g = pot - cur;
   if (isP(p)) {
-    const rp = p.pt === 'RP';
-    const a = { vel: clamp(145 + (cur - 60) * 0.30 + rn(0, 3.2) + (rp ? 2 : 0), 126, 162), ctl: cur + rn(0, 9), brk: cur + rn(0, 9), sta: rp ? cur - 16 + rn(0, 8) : cur + 8 + rn(0, 8) };
+    const rp = p.pt === 'RP', V = velOff();
+    const a = { vel: clamp(145 + V + (cur - 60) * 0.30 + rn(0, 3.2) + (rp ? 2 : 0), 126 + V, 162 + V), ctl: cur + rn(0, 9), brk: cur + rn(0, 9), sta: rp ? cur - 16 + rn(0, 8) : cur + 8 + rn(0, 8) };
     for (let i = 0; i < 4; i++) { const d = cur - pitOvr(a, p.pt); a.ctl += d * 0.8; a.brk += d * 0.8; a.sta += d * 0.5; }
     for (const k of ['ctl', 'brk', 'sta']) a[k] = clamp(a[k], 5, 99);
     const c = {
-      vel: clamp(a.vel + g * 0.24 + Math.abs(rn(0, 1.5)), a.vel, 165),
+      vel: clamp(a.vel + g * 0.24 + Math.abs(rn(0, 1.5)), a.vel, 165 + V),
       ctl: clamp(a.ctl + g + rn(0, 4), a.ctl, 99), brk: clamp(a.brk + g + rn(0, 4), a.brk, 99), sta: clamp(a.sta + g * 0.9 + rn(0, 4), a.sta, 99)
     };
     p.a = a; p.cap = c;
@@ -1353,7 +1365,16 @@ function formArrow(f) { return ['↓', '↘', '→', '↗', '↑'][f + 2]; }
 function formName(f) { return ['絶不調', '不調', '普通', '好調', '絶好調'][f + 2]; }
 function handStr(p) { return (p.thr === 'L' ? '左' : '右') + '投' + (p.bats === 'L' ? '左' : p.bats === 'S' ? '両' : '右') + '打'; }
 function displayName(p) { return p.name; }
+function velMph(v) { return Math.round(v / 1.609344); }
 function velStr(v) { return Math.round(v) + 'km/h'; }
+/* 画面用：メジャー版はマイルも添える（two：2行にする） */
+function velHtml(v, two) {
+  const s = Math.round(v) + 'km/h';
+  if (!LG.mlb) return s;
+  return two ? `${s}<span class="small faint vmph">${velMph(v)}mph</span>` : `${s} <span class="small faint">${velMph(v)}mph</span>`;
+}
+/* ニュース用：メジャー版は「100マイル（161キロ）」 */
+function velNews(v) { const k = Math.round(v); return LG.mlb ? `${velMph(k)}マイル（${k}キロ）` : `${k}キロ`; }
 
 /* =========================================================
    サブポジション・特殊能力・特別練習
@@ -1513,16 +1534,16 @@ function genSkills(p, boost) {
     has('error', a.fld <= 45 ? .35 : a.fld <= 52 ? .15 : .03);
   } else {
     const stf = velScore(a.vel) * 0.45 + a.brk * 0.55;
-    lvG('pinch', 0.05 + boost * 0.6); lvG('vsLB', p.thr === 'L' ? 0.3 : 0); lvG('nobi', (a.vel - 148) / 7); lvG('quick', 0); lvG('tough', 0);
+    lvG('pinch', 0.05 + boost * 0.6); lvG('vsLB', p.thr === 'L' ? 0.3 : 0); lvG('nobi', (a.vel - 148 - velOff()) / 7); lvG('quick', 0); lvG('tough', 0);
     lvG('recover', p.pt === 'RP' ? 0.3 : 0);
     has('kk', stf >= 75 ? .45 : stf >= 66 ? .2 : .03);
     has('kire', a.brk >= 78 ? .4 : a.brk >= 68 ? .15 : .03);
-    has('heavy', a.vel >= 152 ? .2 : .06);
+    has('heavy', a.vel >= 152 + velOff() ? .2 : .06);
     has('lowball', a.ctl >= 75 ? .35 : a.ctl >= 65 ? .14 : .03);
     if (p.pt === 'SP') { has('late', .1); has('slow', .1); }
     has('holdball', .08); has('tempo', .07);
     has('walk', a.ctl <= 45 ? .45 : a.ctl <= 55 ? .2 : .03);
-    has('hrX', a.vel < 142 ? .2 : .08); has('light', .07); has('shaky', a.ctl <= 50 ? .15 : .04);
+    has('hrX', a.vel < 142 + velOff() ? .2 : .08); has('light', .07); has('shaky', a.ctl <= 50 ? .15 : .04);
   }
   has('mood', p.per === 'leader' ? .5 : p.per === 'passion' ? .15 : .04);
   has('moodX', p.per === 'money' ? .07 : .02);
@@ -1608,7 +1629,7 @@ function skGainCand(p) {
   } else {
     const stf = velScore(a.vel) * 0.45 + a.brk * 0.55;
     if (stf >= 62) add('kk', stf - 55); if (a.brk >= 64) add('kire', a.brk - 58); if (a.ctl >= 62) add('lowball', a.ctl - 56);
-    if (a.vel >= 147) add('heavy', 8); add('holdball', 5); add('tempo', 4); if (p.pt === 'SP') add('late', 4);
+    if (a.vel >= 147 + velOff()) add('heavy', 8); add('holdball', 5); add('tempo', 4); if (p.pt === 'SP') add('late', 4);
   }
   add('mood', p.per === 'leader' ? 12 : 2);
   return c.length ? wpick(c, x => x[1])[0] : null;
@@ -2028,7 +2049,10 @@ function teamMgr(tid) {
 /* =========================================================
    試合エンジン（1打席ずつのシミュレーション）
    ========================================================= */
-const LGC = { bb: .077, hbp: .008, k: .188, hr: .0195, babip: .290, err: .012, dbl: .20, tri: .020 };
+const LGC_BASE = { bb: .077, hbp: .008, k: .188, hr: .0195, hrB: 1.35, babip: .290, err: .012, dbl: .20, tri: .020, era0: 3.7 };
+const LGC = Object.assign({}, LGC_BASE);
+/* リーグごとの得点環境（メジャー版は LG.sim で三振・本塁打を多くする）。setLeague から呼ぶ */
+function setSimEnv() { Object.assign(LGC, LGC_BASE, LG.sim || {}); }
 function nz(v) { return (v - 60) / 40; }
 const DEF_FX = { vsL: 0, vsLB: 0, bk: 1, bhr: 1, bab: 0, pk: 1, pbb: 1, phr: 1, pbab: 0, go: 0, nobi: 0, inf: false };
 const DEF_C = { con: 63, pow: 63, eye: 63, spd: 63, arm: 63, fld: 63, def: 63, stuff: 63, ctl: 63 };
@@ -2047,7 +2071,7 @@ function computeSimCenter() {
   C.def = nt ? acc.def / nt : 63; C.stuff = np ? acc.stuff / np : 63; C.ctl = np ? acc.ctl / np : 63;
   G.simC = C;
 }
-function pitMax(p, isSP) { const iron = skFx(p).iron; return isSP ? 68 + p.a.sta * 0.56 + (iron ? 10 : 0) : 16 + p.a.sta * 0.36 + (iron ? 6 : 0); }
+function pitMax(p, isSP) { const iron = skFx(p).iron; const sp = LG.spPit || [68, 0.56]; return isSP ? sp[0] + p.a.sta * sp[1] + (iron ? 10 : 0) : 16 + p.a.sta * 0.36 + (iron ? 6 : 0); }
 function parkHR(hid) { return isUser(hid) ? G.stad.hrF : G.teams[hid].stad.hrF; }
 function pcFor(r) {
   switch (r) { case 'K': return 4 + ri(0, 3); case 'BB': return 5 + ri(0, 2); case 'HBP': return 1 + ri(0, 3); default: return 1 + ri(0, 5); }
@@ -2096,7 +2120,7 @@ function simPA(b, pe, defN, park) {
   const pBB = LGC.bb * Math.exp(0.45 * eye - 0.55 * ctl) * pf.pbb;
   const pHBP = LGC.hbp * Math.exp(-0.25 * ctl);
   const pK = LGC.k * Math.exp(-0.55 * con + 0.55 * stuff - 0.15 * eye) * bf.bk * pf.pk * (1 + pf.nobi * 0.02);
-  const pHR = LGC.hr * Math.exp(1.35 * pow - 0.45 * stuff - 0.1 * ctl - 0.05 * pf.nobi) * park * bf.bhr * pf.phr;
+  const pHR = LGC.hr * Math.exp(LGC.hrB * pow - 0.45 * stuff - 0.1 * ctl - 0.05 * pf.nobi) * park * bf.bhr * pf.phr;
   let r = rnd();
   if ((r -= pBB) < 0) return 'BB';
   if ((r -= pHBP) < 0) return 'HBP';
@@ -3906,9 +3930,10 @@ function maybePhenom(force) {
   const home = LG.mlb ? wpick([0, 1, 2, 3, 4], i => REGION_W[i]) : wpick([0, 1, 2, 3, 4, 5], i => REGION_W[i]);
   const p = makePlayer({ pos, pt: pos === 'P' ? 'SP' : '', age, cur, pot, from: cat, home, gen: true, gt: cat === '高校' ? wpick([1, 2], x => x === 1 ? 60 : 40) : 1 });
   p.team = -2; p.inj = Math.min(p.inj, ri(15, 35));
-  if (isP(p)) { p.a.vel = Math.max(p.a.vel, rf(cat === '高校' ? 148 : 150, cat === '高校' ? 155 : 157)); p.cap.vel = Math.max(p.cap.vel, rf(159, 165)); }
+  const V = velOff();
+  if (isP(p)) { p.a.vel = Math.max(p.a.vel, V + rf(cat === '高校' ? 148 : 150, cat === '高校' ? 155 : 157)); p.cap.vel = Math.max(p.cap.vel, V + rf(159, 165)); }
   // 伸びしろが目標に届くまで上限を少しずつ上げる
-  for (let i = 0; i < 40 && potv(p) < pot; i++) { const ks = Object.keys(p.cap).filter(k => k === 'vel' ? p.cap.vel < 166 : p.cap[k] < 99); if (!ks.length) break; const k = pick(ks); p.cap[k] = Math.min(k === 'vel' ? 166 : 99, p.cap[k] + (k === 'vel' ? 1 : 2)); }
+  for (let i = 0; i < 40 && potv(p) < pot; i++) { const ks = Object.keys(p.cap).filter(k => k === 'vel' ? p.cap.vel < 166 + V : p.cap[k] < 99); if (!ks.length) break; const k = pick(ks); p.cap[k] = Math.min(k === 'vel' ? 166 + V : 99, p.cap[k] + (k === 'vel' ? 1 : 2)); }
   genSkills(p, 1);
   const noise = {}; for (const k of (isP(p) ? PIT_KEYS : BAT_KEYS)) noise[k] = rn(0, 0.5); noise.pot = rn(0, 0.3); noise.ovr = rn(0, 0.5);
   const school = genSchool(cat, home);
@@ -3924,13 +3949,13 @@ function phenomBuzz(t) {
   const p = phenomOf(); if (!p) return;
   if (LG.mlb) {
     if (t !== 20) return;
-    const t2 = p.pr.cat === '高校' ? `全米の高校ランキングで1位に。${isP(p) ? `最速${Math.round(p.a.vel + rf(0, 2))}キロの速球` : '長打力'}にスカウトが集まっています` : `大学の全米選手権で圧巻の活躍。${isP(p) ? `最速${Math.round(p.a.vel + rf(0, 2))}キロ` : ri(3, 6) + '本塁打'}を記録しました`;
+    const t2 = p.pr.cat === '高校' ? `全米の高校ランキングで1位に。${isP(p) ? `最速${velNews(p.a.vel + rf(0, 2))}の速球` : '長打力'}にスカウトが集まっています` : `大学の全米選手権で圧巻の活躍。${isP(p) ? `最速${velNews(p.a.vel + rf(0, 2))}` : ri(3, 6) + '本塁打'}を記録しました`;
     addNews('draft', `${p.pr.school}の${p.name}が${t2}。「${p.pr.nick}」はドラフトの目玉です`, { important: true, note: true, go: 'scout', pid: p.id });
     p.pr.sc = Math.max(p.pr.sc, 45);
     return;
   }
   if (t === 29 && p.pr.cat === '高校') {
-    const t2 = isP(p) ? `最速${Math.round(p.a.vel + rf(0, 2))}キロを記録` : `${ri(3, 6)}本塁打を放つ`;
+    const t2 = isP(p) ? `最速${velNews(p.a.vel + rf(0, 2))}を記録` : `${ri(3, 6)}本塁打を放つ`;
     addNews('draft', `夏の甲子園で${p.pr.school}の${p.name}が${t2}。「${p.pr.nick}」の評価はさらに上がっています`, { important: true, note: true, go: 'scout', pid: p.id });
     p.pr.sc = Math.max(p.pr.sc, 45);
   }
@@ -3938,7 +3963,7 @@ function phenomBuzz(t) {
 }
 function prospectVisible(p) { return p.pr.sc > 0 || p.pr.hype >= 55; }
 function scoutSigma(p) { return 2 + 16 * (1 - p.pr.sc / 100); }
-function shownAttr(p, k) { const s = scoutSigma(p); return clamp(Math.round(p.a[k] + (k === 'vel' ? p.pr.noise[k] * s * 0.3 : p.pr.noise[k] * s)), 1, k === 'vel' ? 170 : 99); }
+function shownAttr(p, k) { const s = scoutSigma(p); return clamp(Math.round(p.a[k] + (k === 'vel' ? p.pr.noise[k] * s * 0.3 : p.pr.noise[k] * s)), 1, k === 'vel' ? 170 + velOff() : 99); }
 function shownOvr(p) { return clamp(Math.round(ovr(p) + p.pr.noise.ovr * scoutSigma(p) * 0.7), 1, 99); }
 function shownPot(p) { if (p.pr.sc < 25) return null; return clamp(Math.round(potv(p) + p.pr.noise.pot * (3 + 14 * (1 - p.pr.sc / 100))), 1, 99); }
 function userDraftValue(p) { const sp = shownPot(p); return (sp != null ? sp : shownOvr(p) + 12) * 0.78 + shownOvr(p) * 0.22 - Math.max(0, p.age - 22) * 1.2 + (p.pr.mark ? 6 : 0); }
@@ -4852,7 +4877,7 @@ function growPlayer(p, ctx) {
       const yrs = age - g.p;
       let dec = (PHYS[k] ? 0.035 : 0.02) * Math.pow(yrs, 0.8) * rf(0.5, 1.5) * (ctx.season === 2 ? 0.5 : 1);
       if (k === 'vel') dec *= 0.35;
-      p.a[k] = Math.max(k === 'vel' ? 118 : 5, p.a[k] - dec);
+      p.a[k] = Math.max(k === 'vel' ? 118 + velOff() : 5, p.a[k] - dec);
       gain -= k === 'vel' ? dec * 2.5 : dec;
     }
   }
@@ -4882,7 +4907,7 @@ function gradeUpNotes() {
 }
 function breakout(p) {
   const keys = shuffle((isP(p) ? PIT_KEYS : BAT_KEYS).slice()).slice(0, 3);
-  for (const k of keys) { const inc = k === 'vel' ? rf(1.5, 3.5) : rf(3, 6); p.cap[k] = Math.min(k === 'vel' ? 166 : 99, p.cap[k] + inc * 0.35); p.a[k] = Math.min(p.cap[k], p.a[k] + inc); }
+  for (const k of keys) { const inc = k === 'vel' ? rf(1.5, 3.5) : rf(3, 6); p.cap[k] = Math.min(k === 'vel' ? 166 + velOff() : 99, p.cap[k] + inc * 0.35); p.a[k] = Math.min(p.cap[k], p.a[k] + inc); }
   p.mor = clamp(p.mor + 10, 0, 100);
   if (isUser(p.team)) addNews('dev', `${p.name}が覚醒！ ${keys.map(k => ATTR_JP[k]).join('・')}が大きく伸びました`, { important: true, tid: p.team, note: 'hi', pid: p.id });
 }
@@ -4937,7 +4962,7 @@ function injure(p, mult) {
   const inj = wpick(pool, x => x.p * (x.w[1] >= 12 ? mult : 1));
   const w = ri(inj.w[0], inj.w[1]);
   p.injW = w; p.injN = inj.n; p.form = Math.min(p.form, 0);
-  if (inj.perm) { if (isP(p)) { p.a.vel = Math.max(120, p.a.vel - rf(1, 3)); p.cap.vel = Math.max(p.a.vel, p.cap.vel - 2); } else p.a.spd -= 3; }
+  if (inj.perm) { if (isP(p)) { p.a.vel = Math.max(120 + velOff(), p.a.vel - rf(1, 3)); p.cap.vel = Math.max(p.a.vel, p.cap.vel - 2); } else p.a.spd -= 3; }
   if (p.team >= 0) {
     if (isUser(p.team) && p.lv === 1) addNews('injury', `${p.name}が${inj.n}で離脱（全治${w}週間）`, { important: w >= 4, tid: p.team, note: w >= 4 ? 'hi' : true, pid: p.id });
     if (p.lv === 1) { if (isUser(p.team) && !G.user.autoSwap) { /* ユーザーに任せる */ } else swapInjured(p.team); }
@@ -5769,8 +5794,9 @@ function aiFreeAgentsMLB() {
    選手の編集（エディット）と、新しい選手の作成
    画面では写し（下書き）を編集し、保存したときに選手へ反映する
    ========================================================= */
-const ATTR_RANGE = { vel: [110, 170] };
-function attrRange(k) { return ATTR_RANGE[k] || [1, 99]; }
+/* 球速はkm/h（メジャー版は水準が速いぶん範囲も上にずれる） */
+function attrRange(k) { return k === 'vel' ? [110 + velOff(), 170 + velOff()] : [1, 99]; }
+function velCapMax() { return 172 + velOff(); }
 function editDraft(p) {
   return {
     id: p.id, name: p.name, num: p.num, age: p.age, thr: p.thr, bats: p.bats, pos: p.pos, pt: p.pt || 'SP',
@@ -5813,7 +5839,7 @@ function applyEdit(p, d) {
   for (const k of isP(p) ? PIT_KEYS : BAT_KEYS) {
     const [lo, hi] = attrRange(k);
     a[k] = clamp(+d.a[k] || lo, lo, hi);
-    c[k] = clamp(Math.max(+d.cap[k] || 0, a[k]), lo, k === 'vel' ? 172 : 99);
+    c[k] = clamp(Math.max(+d.cap[k] || 0, a[k]), lo, k === 'vel' ? velCapMax() : 99);
   }
   p.a = a; p.cap = c;
   const sx0 = p.sx || {};
@@ -5947,6 +5973,7 @@ function genRoster(T) {
   }
 }
 function normalizeTeam(T, target) {
+  const V = velOff();
   for (let it = 0; it < 3; it++) {
     autoRoster(T.id);
     const f1 = rosterLv(T.id, 1);
@@ -5955,7 +5982,7 @@ function normalizeTeam(T, target) {
     for (const p of roster(T.id)) {
       if (p.lv === 3) continue;
       for (const k in p.a) {
-        if (k === 'vel') { p.a.vel = clamp(p.a.vel + d * 0.35, 120, 164); p.cap.vel = Math.max(p.a.vel, clamp(p.cap.vel + d * 0.35, 120, 165)); }
+        if (k === 'vel') { p.a.vel = clamp(p.a.vel + d * 0.35, 120 + V, 164 + V); p.cap.vel = Math.max(p.a.vel, clamp(p.cap.vel + d * 0.35, 120 + V, 165 + V)); }
         else { p.a[k] = clamp(p.a[k] + d, 5, 99); p.cap[k] = Math.max(p.a[k], clamp(p.cap[k] + d, 5, 99)); }
       }
     }
@@ -5966,25 +5993,26 @@ function normalizeTeam(T, target) {
 function synthCareer(p) {
   const yrs = p.frn ? 0 : p.svc; if (!yrs) return;
   const c = p.car; const o = ovr(p); const f = clamp((o - 42) / 26, 0.15, 1.15) * (LG.games || 143) / 143;
+  const kM = LGC.k / LGC_BASE.k, hrM = LGC.hr / LGC_BASE.hr, era0 = LGC.era0 || 3.7;   // リーグの得点環境に合わせる
   let w = 0;
   for (let y = 0; y < yrs; y++) {
     const ff = f * rf(0.6, 1.1) * (y < 2 ? 0.5 : 1);
     if (isP(p)) {
       const sp = p.pt === 'SP';
-      const outs = Math.round((sp ? 420 : 160) * ff); const era = clamp(3.7 - (o - 60) * 0.06 + rn(0, 0.5), 1.2, 7);
+      const outs = Math.round((sp ? 420 : 160) * ff); const era = clamp(era0 - (o - 60) * 0.06 + rn(0, 0.5), 1.2, 7);
       const er = Math.round(era * outs / 27);
       c.g += sp ? Math.round(22 * ff) : Math.round(45 * ff); c.gs += sp ? Math.round(22 * ff) : 0; c.outs += outs; c.er += er; c.r += Math.round(er * 1.08);
-      c.so += Math.round(outs / 3 * (0.75 + (velScore(p.a.vel) - 55) * 0.008)); c.bb += Math.round(outs / 3 * 0.33); c.h += Math.round(outs / 3 * 0.9); c.hr += Math.round(outs / 3 * 0.08);
+      c.so += Math.round(outs / 3 * (0.75 + (velScore(p.a.vel) - 55) * 0.008) * kM); c.bb += Math.round(outs / 3 * 0.33); c.h += Math.round(outs / 3 * 0.9); c.hr += Math.round(outs / 3 * 0.08 * hrM);
       if (sp) { c.w += Math.round(9 * ff + (o - 60) * 0.12); c.l += Math.round(7 * ff); }
       else { c.w += Math.round(3 * ff); c.l += Math.round(3 * ff); c.hld += Math.round(14 * ff); if (rpOvr(p) >= 68) c.sv += Math.round(18 * ff); }
-      w += (3.7 + 1.0 - era) * outs / 27 / 10;
+      w += (era0 + 1.0 - era) * outs / 27 / 10;
     } else {
       const pa = Math.round(500 * ff); const ab = Math.round(pa * 0.89);
       const av = clamp(0.245 + (p.a.con - 60) * 0.0018 + rn(0, 0.015), 0.18, 0.34);
-      const hr = Math.round(pa * 0.021 * Math.exp(1.35 * nz(p.a.pow)) * rf(0.7, 1.2));
+      const hr = Math.round(pa * 0.021 * hrM * Math.exp(LGC.hrB * nz(p.a.pow)) * rf(0.7, 1.2));
       const h = Math.round(ab * av);
       c.g += Math.round(125 * ff); c.pa += pa; c.ab += ab; c.h += h; c.hr += hr; c.d += Math.round(h * 0.18); c.t += Math.round(h * 0.02);
-      c.rbi += Math.round(hr * 3 + h * 0.25); c.r += Math.round(h * 0.42); c.bb += Math.round(pa * 0.08); c.so += Math.round(pa * 0.19); c.sb += Math.round(pa * 0.03 * Math.max(0, nz(p.a.spd) + 0.5));
+      c.rbi += Math.round(hr * 3 + h * 0.25); c.r += Math.round(h * 0.42); c.bb += Math.round(pa * 0.08); c.so += Math.round(pa * 0.19 * kM); c.sb += Math.round(pa * 0.03 * Math.max(0, nz(p.a.spd) + 0.5));
       w += (o - 50) / 9 * ff;
     }
   }
@@ -6022,7 +6050,7 @@ function newGame(o) {
     v: 1, year: y0, startYear: y0, month: 1, week: 1, nid: 1, sid: 1, gid: 1, dayNo: 0, stamp: 0,
     teams: [], players: {}, staff: {}, staffPool: [], prospects: [], foreign: [], fapool: [], faMarket: [], compPending: [],
     news: [], pending: [], evCool: {}, boxes: {}, boxOrder: [], hist: { seasons: [], user: [] }, legends: [], retiredCoaches: [], mlb: [], trades: [],
-    flags: {}, post: null, draft: null, sched: null, day: 0, weekly: null, gameOver: null, notes: [], noteSeq: 0, mlbTry: [], mlbAway: [], mode: LG.mode
+    flags: {}, post: null, draft: null, sched: null, day: 0, weekly: null, gameOver: null, notes: [], noteSeq: 0, mlbTry: [], mlbAway: [], mode: LG.mode, velV: 1
   };
   const defs = TEAM_DEFS.map(d => Object.assign({}, d));
   if (C) applyCustomDef(defs[o.team], C);
@@ -6479,6 +6507,8 @@ function migrateSave() {
   if (!G.recs) seedHistory(true);
   if (G.user) { if (G.user.noteStop == null) G.user.noteStop = true; if (G.user.noteToast == null) G.user.noteToast = true; if (G.user.osNote == null) G.user.osNote = false; }
   const all = Object.values(G.players).concat(G.prospects || [], G.foreign || [], G.mlbAway.map(m => m.p));
+  // 球速の水準をリーグに合わせる前のセーブ（メジャー版は日本より速い）
+  if (!G.velV) { const dv = LG.velAdd || 0; if (dv) for (const p of all) if (isP(p) && p.a && p.a.vel != null) { p.a.vel += dv; if (p.cap && p.cap.vel != null) p.cap.vel += dv; } G.velV = 1; }
   for (const p of all) {
     if (!p.sub || !p.sx) genSubs(p);
     if (!p.sk) genSkills(p, p.gen ? 1 : 0);
@@ -8370,7 +8400,7 @@ MODALS.player = ({ id }) => {
   const showCap = mine;
   const attrs = keys.map(k => {
     const v = p.a[k], c = p.cap[k];
-    if (k === 'vel') return `<div class="row" style="gap:10px"><span style="width:64px" class="small">${ATTR_JP[k]}</span><div style="flex:1">${bar(velScore(v), 100, '', showCap ? velScore(c) : null)}</div><span class="num" style="width:74px;text-align:right">${Math.round(v)}km/h</span></div>`;
+    if (k === 'vel') return `<div class="row" style="gap:10px"><span style="width:64px" class="small">${ATTR_JP[k]}</span><div style="flex:1">${bar(velScore(v), 100, '', showCap ? velScore(c) : null)}</div><span class="num" style="width:74px;text-align:right">${velHtml(v, true)}</span></div>`;
     return `<div class="row" style="gap:10px"><span style="width:64px" class="small">${ATTR_JP[k]}</span><div style="flex:1">${bar(v, 100, '', showCap ? c : null)}</div><span style="width:74px;text-align:right">${av(v)}</span></div>`;
   }).join('');
   const T = p.team >= 0 ? G.teams[p.team] : null;
@@ -9117,7 +9147,7 @@ function foreignModal(p) {
   const keys = isP(p) ? PIT_KEYS : BAT_KEYS; const s = 2 + 10 * (1 - p.pr.sc / 100);
   return { title: `${esc(p.name)} <span class="small muted">${POS_JP[p.pos]}・${p.age}歳</span>`, size: 'narrow',
     body: `<dl class="kv"><dt>前所属</dt><dd>${esc(p.pr.school)}</dd><dt>推定総合</dt><dd>${av(shownFrnOvr(p))}</dd><dt>適応力</dt><dd>${adaptLabel(p)}</dd><dt>調査度</dt><dd>${Math.round(p.pr.sc)}%</dd><dt>条件</dt><dd>${fmtSal(p.fa.ask)}×${p.fa.yrs}年／${LG.mlb ? '譲渡金' : '移籍金'}${p.fa.fee ? fmtOku(p.fa.fee) : 'なし'}</dd><dt>性格</dt><dd>${p.pr.sc >= 50 ? esc(PERS[p.per].n) : '不明'}</dd></dl>
-      <hr class="sep">${keys.map(k => `<div class="row sp"><span class="small">${ATTR_JP[k]}</span><span>${k === 'vel' ? Math.round(p.a.vel + (p.pr.noise.ovr * s * 0.3)) + 'km/h' : av(clamp(Math.round(p.a[k] + p.pr.noise.ovr * s), 1, 99))}</span></div>`).join('')}
+      <hr class="sep">${keys.map(k => `<div class="row sp"><span class="small">${ATTR_JP[k]}</span><span>${k === 'vel' ? velHtml(p.a.vel + (p.pr.noise.ovr * s * 0.3)) : av(clamp(Math.round(p.a[k] + p.pr.noise.ovr * s), 1, 99))}</span></div>`).join('')}
       <hr class="sep">${!isP(p) ? `<div class="row small" style="margin-bottom:6px">守れる位置：${POS_JP[p.pos]} ${subTags(p, { empty: '<span class="faint">ほかになし</span>' })}</div>` : ''}<div class="small muted" style="margin-bottom:4px">特殊能力</div>${p.pr.sc >= 50 ? skChips(p) : '<span class="faint small">調査50%以上で判明</span>'}`,
     foot: `<button class="btn" data-a="closeModal">閉じる</button><button class="btn" data-a="peOpen" data-id="${p.id}">編集</button><button class="btn pri" data-a="signFrn" data-id="${p.id}">獲得する</button>` };
 }
@@ -9174,7 +9204,7 @@ ACT.scf = el => { const f = UI.f.scf; f[el.dataset.k] = el.type === 'checkbox' ?
 ACT.scMark = el => { const p = G.prospects.find(x => x.id === +el.dataset.id); if (p) p.pr.mark = !p.pr.mark; render(); };
 function prospectModal(p) {
   const keys = isP(p) ? PIT_KEYS : BAT_KEYS; const sc = p.pr.sc; const sig = scoutSigma(p);
-  const attr = keys.map(k => { const v = shownAttr(p, k); const rg = k === 'vel' ? Math.round(sig * 0.3) : Math.round(sig); return `<div class="row sp"><span class="small">${ATTR_JP[k]}</span><span>${k === 'vel' ? v + 'km/h' : av(v)} <span class="small faint">±${rg}</span></span></div>`; }).join('');
+  const attr = keys.map(k => { const v = shownAttr(p, k); const rg = k === 'vel' ? Math.round(sig * 0.3) : Math.round(sig); return `<div class="row sp"><span class="small">${ATTR_JP[k]}</span><span>${k === 'vel' ? velHtml(v) : av(v)} <span class="small faint">±${rg}</span></span></div>`; }).join('');
   return { title: `${esc(p.name)} <span class="small muted">${esc(p.pr.school)}</span> ${genTag(p)}`, size: 'narrow',
     body: `${p.pr.gen ? `<p class="gen-note">「${esc(p.pr.nick || '怪物')}」と呼ばれる、10年に一度の逸材です。${LG.mlb ? '全体1位指名の最有力候補です。' : '1位指名は複数球団の競合が確実です。'}</p>` : ''}<div class="row"><span class="tag">${p.pr.cat}</span><span class="tag">${isP(p) ? '投手' : POS_JP[p.pos]}</span><span class="small muted">${p.age}歳　${handStr(p)}　${esc(REGIONS[p.home])}</span></div>
       <dl class="kv" style="margin-top:10px"><dt>注目度</dt><dd>${p.pr.hype}</dd><dt>調査度</dt><dd>${Math.round(sc)}%</dd><dt>推定総合</dt><dd>${av(shownOvr(p))}</dd><dt>推定伸びしろ</dt><dd>${shownPot(p) != null ? gr(shownPot(p)) : '<span class="faint">調査25%以上で判明</span>'}</dd>
@@ -9923,6 +9953,8 @@ function helpMLB() {
     <tr><td>12月</td><td>年俸調停・海外選手の獲得・ドラフト抽選会。年末にぜいたく税とオーナー評価。</td></tr></tbody></table>
     <h4>リーグのしくみ</h4><ul class="small"><li>30球団が2リーグ・6地区に分かれます。各リーグの地区1位3球団と、それ以外で勝率の高い3球団（ワイルドカード）がポストシーズンへ。上位2シードは初戦が免除されます。</li>
     <li>延長戦は10回から無死二塁で始まり、引き分けはありません。先発は5人のローテーションです。</li>
+    <li>メジャーは日本より球速が速く、投手の速球はおよそ151キロ（94マイル）が平均、救援の速球派は160キロ（100マイル）を超えます。能力の評価はリーグの水準に合わせているので、同じ評価でも日本版より5キロほど速い数字になります。</li>
+    <li>そのぶん三振と本塁打が多く、先発投手は100球前後で交代するのがふつうです。</li>
     <li>試合に出るのは26人（メジャー登録・投手は13人まで）。40人枠の残りはマイナーで待機し、40人枠の外にマイナー契約の選手がいます。</li></ul>
   </div><div>
     <h4>契約とお金</h4><ul class="small"><li>メジャーに登録された期間（サービスタイム）で契約の段階が変わります。0〜2年は最低年俸に近い額で自動更新、3〜5年は年俸調停、6年を過ぎて契約が切れるとFAです。</li>
@@ -10041,7 +10073,7 @@ MODALS.pedit = ({ id }) => {
     ${d.wasP !== P && d.hasStats ? '<p class="small warn" style="margin:8px 0 0">投手と野手を入れ替えると、これまでの成績の記録は消えます。</p>' : ''}`;
   const attrs = `<table class="t compact ed-attr"><thead><tr><th>能力</th><th class="num">いま</th><th></th><th class="num">上限</th></tr></thead><tbody>${keys.map(k => {
     const [lo, hi] = attrRange(k);
-    return `<tr><td>${ATTR_JP[k]}</td><td class="num"><input class="inp num" type="number" min="${lo}" max="${hi}" value="${Math.round(d.a[k])}" data-i="peAttr" data-w="a" data-k="${k}" aria-label="${ATTR_JP[k]}（いま）"></td><td>${k === 'vel' ? '<span class="small muted">km/h</span>' : `<span data-gr="${k}">${gr(d.a[k])}</span>`}</td><td class="num"><input class="inp num" type="number" min="${lo}" max="${k === 'vel' ? 172 : 99}" value="${Math.round(Math.max(d.cap[k], d.a[k]))}" data-i="peAttr" data-w="cap" data-k="${k}" aria-label="${ATTR_JP[k]}（上限）"></td></tr>`;
+    return `<tr><td>${ATTR_JP[k]}</td><td class="num"><input class="inp num" type="number" min="${lo}" max="${hi}" value="${Math.round(d.a[k])}" data-i="peAttr" data-w="a" data-k="${k}" aria-label="${ATTR_JP[k]}（いま）"></td><td>${k === 'vel' ? '<span class="small muted">km/h</span>' : `<span data-gr="${k}">${gr(d.a[k])}</span>`}</td><td class="num"><input class="inp num" type="number" min="${lo}" max="${k === 'vel' ? velCapMax() : 99}" value="${Math.round(Math.max(d.cap[k], d.a[k]))}" data-i="peAttr" data-w="cap" data-k="${k}" aria-label="${ATTR_JP[k]}（上限）"></td></tr>`;
   }).join('')}</tbody></table>
     <div class="row" style="margin-top:8px"><button class="btn xs" data-a="peAll" data-v="-5">全体 −5</button><button class="btn xs" data-a="peAll" data-v="5">全体 +5</button><button class="btn xs" data-a="peCap" data-v="0">上限をいまに合わせる</button><button class="btn xs" data-a="peCap" data-v="10">上限を+10</button></div>`;
   const subs = P ? '<p class="small muted" style="margin:0">投手にはサブポジションはありません。</p>' : `<div class="ed-grid">${SUB_KEYS.filter(k => k !== d.pos).map(k => edFld(POS_JP[k], `<select class="inp" data-c="peSub" data-k="${k}">${[0, 1, 2, 3].map(v => opt(v, v ? SUB_MARK[v] + ' ' + SUB_LVN[v] : '守れない', d.sub[k] || 0)).join('')}</select>`)).join('')}</div>`;
@@ -10076,7 +10108,7 @@ function peLive() {
 }
 ACT.peTxt = el => { UI.f.pe[el.dataset.k] = el.value; };
 ACT.peNum = el => { UI.f.pe[el.dataset.k] = el.dataset.k === 'sal' ? moneyFrom(+el.value) : +el.value; };
-ACT.peAttr = el => { const d = UI.f.pe; const [lo, hi] = attrRange(el.dataset.k); d[el.dataset.w][el.dataset.k] = clamp(+el.value || lo, lo, el.dataset.w === 'cap' && el.dataset.k === 'vel' ? 172 : hi); peLive(); };
+ACT.peAttr = el => { const d = UI.f.pe; const [lo, hi] = attrRange(el.dataset.k); d[el.dataset.w][el.dataset.k] = clamp(+el.value || lo, lo, el.dataset.w === 'cap' && el.dataset.k === 'vel' ? velCapMax() : hi); peLive(); };
 ACT.peRange = el => { UI.f.pe.inj = +el.value; const s = $('#peInj'); if (s) s.textContent = injLabel(+el.value); };
 ACT.peSel = el => {
   const d = UI.f.pe; const k = el.dataset.k;
@@ -10115,7 +10147,7 @@ ACT.peAll = el => {
 };
 ACT.peCap = el => {
   const d = UI.f.pe; const v = +el.dataset.v;
-  for (const k of editKeys(d)) d.cap[k] = v ? clamp(Math.max(d.cap[k], d.a[k]) + (k === 'vel' ? v * 0.4 : v), d.a[k], k === 'vel' ? 172 : 99) : d.a[k];
+  for (const k of editKeys(d)) d.cap[k] = v ? clamp(Math.max(d.cap[k], d.a[k]) + (k === 'vel' ? v * 0.4 : v), d.a[k], k === 'vel' ? velCapMax() : 99) : d.a[k];
   renderModalRoot();
 };
 ACT.peCancel = el => { const id = +el.dataset.id; UI.f.pe = null; replaceModal('player', { id }); render(); };
