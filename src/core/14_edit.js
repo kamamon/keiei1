@@ -104,7 +104,7 @@ function createPlayer(o) {
   if (dest === 'u2' || dest === 'u3') { tid = G.user.tid; lv = dest === 'u3' ? 3 : 2; }
   else if (dest.startsWith('t:')) tid = +dest.slice(2);
   if (tid >= 0) {
-    if (lv === 2 && shihai(tid).length >= LIM.shihai) return { ok: false, why: `${tName(tid)}の支配下登録が70人に達しています` };
+    if (lv === 2 && shihai(tid).length >= LIM.shihai) return { ok: false, why: `${tName(tid)}の支配下登録が${LIM.shihai}人に達しています` };
     if (lv === 3 && rosterLv(tid, 3).length >= LIM.ikusei) return { ok: false, why: `育成選手が${LIM.ikusei}人に達しています` };
   }
   const p = makePlayer({ pos, pt: pos === 'P' ? (o.pt === 'RP' ? 'RP' : 'SP') : '', age, cur, pot, from: 'エディット', gt: 1, frn: !!o.frn });

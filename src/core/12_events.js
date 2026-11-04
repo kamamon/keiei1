@@ -48,7 +48,7 @@ function milestoneCheck(res) {
         p.ms = p.ms || {}; p.ms[key] = G.year;
         const big = m >= MS_BIG[k]; const user = isUser(p.team); const nm = '通算' + m + MS_NAME[k];
         p.pop = clamp(p.pop + (big ? 6 : 3), 0, 100);
-        addNews('record', `${tShort(p.team)}の${p.name}が${nm}を達成`, { important: user || big, tid: p.team, note: user ? (big ? 'hi' : true) : false, pid: p.id });
+        if (user || big || !LG.mlb || m >= MILESTONES[k][1]) addNews('record', `${tShort(p.team)}の${p.name}が${nm}を達成`, { important: user || big, tid: p.team, note: user ? (big ? 'hi' : true) : false, pid: p.id });
         if (!user) continue;
         uT().pop = clamp(uT().pop + (big ? 1.5 : 0.5), 0, 99);
         goodsBuzz(big ? 3 : 2, big ? 0.3 : 0.12);
@@ -115,8 +115,8 @@ const EVENTS = {
       { l: '見送る', d: '変化なし', f: () => '今回は見送りました。' }]
   },
   homesick: {
-    t: '外国人選手がホームシック', w: 1, cond: () => roster(G.user.tid).some(p => p.frn && p.lv === 1),
-    prep: () => ({ pid: pick(roster(G.user.tid).filter(p => p.frn && p.lv === 1)).id }),
+    t: '外国人選手がホームシック', w: 1, cond: () => roster(G.user.tid).some(p => intlPlayer(p) && p.lv === 1),
+    prep: () => ({ pid: pick(roster(G.user.tid).filter(p => intlPlayer(p) && p.lv === 1)).id }),
     text: d => `${P_(d.pid) ? P_(d.pid).name : '外国人選手'}が家族と離れて元気がありません。通訳から相談が来ています。`,
     ch: [{ l: '家族を呼び寄せる（1000万円）', d: '本人のやる気+20', f: d => { book('exp', 'other', 1000); const p = P_(d.pid); if (p) { p.mor = clamp(p.mor + 20, 0, 100); p.form = Math.min(2, p.form + 1); } return '家族と再会して笑顔が戻りました。'; } },
       { l: '様子を見る', d: '本人のやる気−12', f: d => { const p = P_(d.pid); if (p) p.mor = clamp(p.mor - 12, 0, 100); return 'しばらく元気がない状態が続きそうです。'; } }]
@@ -282,3 +282,6 @@ function maybeTradeOffer() {
   const give = pick(cands);
   queueEvent('tradeOffer', { tid: T.id, want: want.id, give: give.id });
 }
+
+/* 海外から来た選手（日本版は外国人選手、メジャー版は日本・韓国・台湾から来た選手） */
+function intlPlayer(p) { return LG.mlb ? (p.nat === 'JP' || p.nat === 'KR' || p.nat === 'TW') && !!p.prFrom : !!p.frn; }

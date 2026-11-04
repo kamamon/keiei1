@@ -12,13 +12,14 @@ function curFromPeak(P, age, gt) {
 }
 function makeTeam(d, i) {
   return {
-    id: i, city: d.city, nick: d.nick, kanji: d.kanji, color: d.color, color2: d.color2, league: d.league, market: d.market, pop: d.pop + ri(-2, 2),
+    id: i, city: d.city, nick: d.nick, kanji: d.kanji, color: d.color, color2: d.color2, league: d.league, div: d.div || 0, market: d.market, pop: d.pop + ri(-2, 2),
     fans: d.market * 55 + d.pop * 3.5, parent: d.parent, region: d.region, rec: blankRec(), roster: [], rotIdx: 0, facLv: d.fac,
     stad: { name: d.stadium, cap: d.cap, dome: d.dome, hrF: d.hrF }, mgr: aiManager(d.market), payBudget: 0, lastPct: 0.5, lastRank: null,
-    titles: { lg: 0, gs: 0 }, att: { g: 0, tot: 0 }, star: d.star, shift: d.shift, dPicks: 0, ikPicks: 0
+    titles: { lg: 0, gs: 0, div: 0 }, att: { g: 0, tot: 0 }, star: d.star, shift: d.shift, dPicks: 0, ikPicks: 0, luxY: 0
   };
 }
 function genRoster(T) {
+  if (LG.mlb) return genRosterMLB(T);
   const shift = T.shift * 0.5 + rf(-1.5, 1.5);
   const add = (pos, pt, o) => {
     const age = o.age || sampleAge(); const gt = wpick([0, 1, 2], x => [25, 50, 25][x]);
@@ -67,12 +68,12 @@ function normalizeTeam(T, target) {
       }
     }
   }
-  for (const p of roster(T.id)) { p.sal = marketSalary(p); if (p.frn) p.sal = roundSal(p.sal * 1.2); if (p.lv === 3) p.sal = ri(24, 50) * 10; p.pop = clamp(Math.round((ovr(p) - 50) * 1.6 + p.svc * 1.5 + rn(0, 8)), 0, 95); }
+  for (const p of roster(T.id)) { p.sal = marketSalary(p); if (p.frn) p.sal = roundSal(p.sal * 1.2); if (p.lv === 3) p.sal = LG.mlb ? MIN_SAL_IK : ri(24, 50) * 10; p.pop = clamp(Math.round((ovr(p) - 50) * 1.6 + p.svc * 1.5 + rn(0, 8)), 0, 95); }
 }
 /* 開始時点の選手に、それまでの通算成績（概算）を持たせる */
 function synthCareer(p) {
   const yrs = p.frn ? 0 : p.svc; if (!yrs) return;
-  const c = p.car; const o = ovr(p); const f = clamp((o - 42) / 26, 0.15, 1.15);
+  const c = p.car; const o = ovr(p); const f = clamp((o - 42) / 26, 0.15, 1.15) * (LG.games || 143) / 143;
   let w = 0;
   for (let y = 0; y < yrs; y++) {
     const ff = f * rf(0.6, 1.1) * (y < 2 ? 0.5 : 1);
@@ -121,6 +122,7 @@ function applyCustomDef(d, C) {
 }
 function newGame(o) {
   setSeed(o.seed || ((Date.now() ^ (Math.random() * 1e9)) >>> 0));
+  setLeague(o.mode || 'npb');
   NAMESET = new Set();
   const C = o.custom || null;
   const y0 = C && C.year ? clamp(Math.round(+C.year), 1950, 2200) : START_YEAR;
@@ -128,7 +130,7 @@ function newGame(o) {
     v: 1, year: y0, startYear: y0, month: 1, week: 1, nid: 1, sid: 1, gid: 1, dayNo: 0, stamp: 0,
     teams: [], players: {}, staff: {}, staffPool: [], prospects: [], foreign: [], fapool: [], faMarket: [], compPending: [],
     news: [], pending: [], evCool: {}, boxes: {}, boxOrder: [], hist: { seasons: [], user: [] }, legends: [], retiredCoaches: [], mlb: [], trades: [],
-    flags: {}, post: null, draft: null, sched: null, day: 0, weekly: null, gameOver: null, notes: [], noteSeq: 0, mlbTry: [], mlbAway: []
+    flags: {}, post: null, draft: null, sched: null, day: 0, weekly: null, gameOver: null, notes: [], noteSeq: 0, mlbTry: [], mlbAway: [], mode: LG.mode
   };
   const defs = TEAM_DEFS.map(d => Object.assign({}, d));
   if (C) applyCustomDef(defs[o.team], C);
@@ -152,7 +154,7 @@ function newGame(o) {
   initTown(T, C ? C.town : 'normal', C ? C.land : 'normal');
   G.fin = { cash: d.cash, y: { rev: {}, exp: {} }, m: { rev: 0, exp: 0 }, months: [], hist: [], loans: [], att: { g: 0, tot: 0, max: 0, sell: 0, list: [] }, lastRev: 400000 + d.market * 300000, lastAtt: 0, awayWeek: 0, capexY: 0 };
   const rm = tixRefMul(T);
-  G.tix = { out: Math.round(TIX.out.ref * rm / 100) * 100, inn: Math.round(TIX.inn.ref * rm / 100) * 100, pre: Math.round(TIX.pre.ref * rm / 500) * 500 };
+  G.tix = refTix(T);
   G.ads = { lv: { tv: 0, web: 1, paper: 0, train: T.star <= 3 ? 1 : 0, local: 1, video: T.star <= 2 ? 1 : 0 }, paused: false };
   G.promo = { queue: [], log: [] };
   G.budget = defaultBudget(T);
@@ -173,14 +175,16 @@ function newGame(o) {
     normalizeTeam(t, target);
     t.payBudget = aiPayBudget(t); autoRoster(t.id);
     const pay = teamPayroll(t.id); const lim = t.payBudget * 0.76;
-    const f = clamp(lim / pay, 0.6, 2.2);
-    for (const p of roster(t.id)) if (p.sal > 1500 && p.lv !== 3) p.sal = roundSal(Math.max(1500, p.sal * f));
+    const f = LG.mlb ? clamp(lim / pay, 0.7, 1.5) : clamp(lim / pay, 0.6, 2.2);
+    const fl = LG.mlb ? MIN_SAL * 1.3 : 1500;
+    for (const p of roster(t.id)) if (p.sal > fl && p.lv !== 3) p.sal = roundSal(Math.max(fl, p.sal * f));
   }
   // 能力をそろえたあとで特殊能力を決め直す（持ち味に合った能力がつくように）
   for (const t of G.teams) for (const p of roster(t.id)) genSkills(p, 0);
   genSchedule();
   genDraftClass();
-  genForeign(14);
+  if (LG.mlb) G.draftOrder = mlbDraftOrder(true);
+  genForeign(LG.mlb ? 18 : 14);
   computeSimCenter();
   touch();
   addNews('owner', `${G.user.name}が${tName(T.id)}の球団社長に就任。オーナーから「${ownerHope(T)}」と期待を託されました`, { important: true, tid: T.id, note: false });
@@ -188,6 +192,7 @@ function newGame(o) {
 }
 function ownerHope(T) {
   const st = T.star;
+  if (LG.mlb) return st <= 1 ? 'ワールドシリーズを制覇して、王者の座を取り戻してほしい' : st <= 2 ? '毎年ポストシーズンを争えるチームと、健全な経営を両立してほしい' : st <= 3 ? '3年以内にポストシーズンの常連になってほしい' : '赤字を減らしながら、地元に愛されるチームを育ててほしい';
   if (st <= 1) return '常勝球団として日本一を取り戻してほしい';
   if (st <= 2) return '優勝争いのできるチームと健全な経営を両立してほしい';
   if (st <= 3) return '3年以内にAクラスの常連になってほしい';
@@ -198,6 +203,20 @@ function ownerHope(T) {
 function teamSnapshot() { const s = {}; for (const T of G.teams) s[T.id] = { w: T.rec.w, l: T.rec.l, d: T.rec.d }; return s; }
 function phaseLabel(t) {
   t = t === undefined ? curTurn() : t;
+  if (LG.mlb) {
+    if (t <= 3) return 'オフシーズン';
+    if (t <= 7) return 'スプリングトレーニング';
+    if (t <= 10) return 'オープン戦';
+    if (t === LG.draftT) return 'オールスター・ドラフト';
+    if (t <= SEASON_END) return 'レギュラーシーズン';
+    if (t === MAKEUP_TURN) return 'レギュラーシーズン 最終週';
+    if (t === 36) return 'ワイルドカードシリーズ';
+    if (t === 37) return '地区シリーズ';
+    if (t === 38) return 'リーグ優勝決定シリーズ';
+    if (t === 39) return 'ワールドシリーズ';
+    if (t <= 43) return 'オフシーズン（FA）';
+    return 'オフシーズン（契約・年俸調停）';
+  }
   if (t <= 3) return 'オフシーズン（自主トレ）';
   if (t <= 7) return '春季キャンプ';
   if (t <= 10) return 'オープン戦';
@@ -212,13 +231,13 @@ function phaseLabel(t) {
 }
 function blockingTasks() {
   const t = curTurn(); const out = [];
-  if (t === 39 && G.draft && G.draft.stage !== 'done') out.push({ k: 'draft', t: 'ドラフト会議が終わっていません' });
+  if (t === LG.draftT && G.draft && G.draft.stage !== 'done') out.push({ k: 'draft', t: LG.mlb ? 'ドラフトが終わっていません' : 'ドラフト会議が終わっていません' });
   if (G.gameOver) out.push({ k: 'over', t: 'ゲームは終了しています' });
   return out;
 }
 function autoResolveBlocking() {
   const t = curTurn();
-  if (t === 39 && G.draft && G.draft.stage !== 'done') autoUserDraft();
+  if (t === LG.draftT && G.draft && G.draft.stage !== 'done') autoUserDraft();
 }
 function playExhibitions() {
   const ut = G.user.tid; const res = [];
@@ -244,15 +263,16 @@ function advanceWeek() {
   if (t >= 8 && t <= 10) report.exh = playExhibitions();
   if (t >= SEASON_START && t <= SEASON_END) playWeekGames(t);
   if (t === 21) interleagueTitle();
-  if (t === 27) allStar();
+  if (t === LG.asgT) allStar();
   if (G.week === 4 && t >= 15 && t <= 35) monthlyMvp();
   if (t === MAKEUP_TURN) { playMakeups(); seasonEnd(); }
-  if (t >= 36 && t <= 38) advancePost(t);
-  if (t === 39) { if (!G.draft) startDraft(); if (G.draft.stage !== 'done') autoUserDraft(); else finishDraft(); }
+  if (t >= 36 && t <= LG.postEnd) advancePost(t);
+  if (t === LG.draftT) { if (!G.draft) startDraft(); if (G.draft.stage !== 'done') autoUserDraft(); else finishDraft(); }
   if (t === 42) faDecide(false);
   if (t === 43) faDecide(true);
   if (t === 45) aiForeignSignings();
   if (t === 46) aiTryouts();
+  if (LG.mlb && (t === 2 || t === 9 || t === 20)) aiFreeAgentsMLB();
   // 共通の週次処理
   const weekRes = {}; for (const T of G.teams) { const s = snap[T.id]; const r = T.rec; weekRes[T.id] = { g: (r.w + r.l + r.d) - (s.w + s.l + s.d), w: r.w - s.w }; }
   weeklyDevelopment();
@@ -291,6 +311,7 @@ function advanceWeek() {
   return report;
 }
 function seasonEnd() {
+  if (LG.mlb) return seasonEndMLB();
   for (const T of G.teams) { T.lastPct = pctOf(T.rec); }
   for (let lg = 0; lg < 2; lg++) standings(lg).forEach(x => { x.t.lastRank = x.rank; if (x.rank === 1) { x.t.titles.lg++; x.t.pop = clamp(x.t.pop + 2, 0, 99); x.t.popBonus = (x.t.popBonus || 0) + 6; } if (x.rank <= 3) x.t.popBonus = (x.t.popBonus || 0) + 1.5; if (x.rank === 6) x.t.popBonus = (x.t.popBonus || 0) - 2; });
   for (const id in G.players) { const p = G.players[id]; p.sTeam = p.team; if ((p.w1 || 0) >= 12) p.svc++; p.w1 = 0; }
@@ -325,9 +346,10 @@ function phaseStart(t) {
     prunePool();
     addNews('league', `${G.year}年のペナントレースが開幕！`, { important: true });
   }
-  if (t === 16) genForeign(5);
-  if (t === 39) startDraft();
-  if (t === 22 || t === 29) phenomBuzz(t);
+  if (t === 16 && !LG.mlb) genForeign(5);
+  if (t === LG.draftT) startDraft();
+  if (t === 20 || t === 22 || t === 29) phenomBuzz(t);
+  if (t === 46 && LG.mlb) mlbLottery();
   if (t === 30 || t === 32 || t === 34) titleRaceNotes();
   if (t === 32) retireAnnounce();
   if (t === SEASON_END) { titleSitCheck(); farewellWeek(); }
@@ -335,20 +357,20 @@ function phaseStart(t) {
   if (t === 40) {
     processRetirements();
     aiReleases();
-    const back = mlbSeasonEnd();
+    const back = LG.mlb ? [] : mlbSeasonEnd();
     declareFA(back);
     postingRequests();
   }
   if (t === 41) { aiFABids(); if (G.fallCamp.on) { book('exp', 'camp', 4000); addNews('camp', '秋季キャンプで若手が鍛錬中', { tid: ut }); } }
   if (t === 42) aiFABids();
-  if (t === 43) decideAwards();
+  if (t === 43) { decideAwards(); if (LG.mlb) aiFABids(); }
   if (t === 44) {
-    for (const c of G.compPending.splice(0)) { payComp(c.to, ut, c.prev * (c.rank === 'A' ? 0.8 : 0.6)); }
+    for (const c of (G.compPending || []).splice(0)) { payComp(c.to, ut, c.prev * (c.rank === 'A' ? 0.8 : 0.6)); }
     openRenewals();
     for (const T of G.teams) if (!isUser(T.id)) aiRenewals(T.id);
     sponsorYearEnd();
     G.foreign = G.foreign.filter(p => chance(0.3));
-    genForeign(14);
+    genForeign(LG.mlb ? 16 : 14);
     G.naming.offers.push(...(G.naming.main ? [] : genNamingOffers('main')));
     refreshStaffPool();
   }
@@ -362,6 +384,7 @@ function yearEnd() {
   winterLeague();
   skillYearly();
   archiveSeason();
+  luxTaxYearEnd();
   applyContractsYearEnd();
   // 収支の締め
   const F = G.fin; const T = uT();
@@ -376,7 +399,7 @@ function yearEnd() {
   F.hist.push({ y: G.year, rev: Math.round(yearTotal('rev')), exp: Math.round(yearTotal('exp')), net: Math.round(yearTotal('rev') - yearTotal('exp')), op: Math.round(net0), y_rev: F.y.rev, y_exp: F.y.exp,
     att: F.att.tot, attG: F.att.g, fc: Math.round(G.fc.members), pop: r1(T.pop), rank: T.lastRank, cash: Math.round(F.cash), pay: Math.round(teamPayroll(T.id)) });
   F.lastRev = rev0; F.lastAtt = F.att.tot;
-  G.hist.user.push({ y: G.year, rank: T.lastRank, w: T.rec.w, l: T.rec.l, d: T.rec.d, lg: G.post && G.post.lgChamp.includes(T.id), champ: G.post && G.post.champ === T.id, att: F.att.tot, net: Math.round(yearTotal('rev') - yearTotal('exp')), trust: G.owner.trust });
+  G.hist.user.push({ y: G.year, rank: T.lastRank, w: T.rec.w, l: T.rec.l, d: T.rec.d, lg: G.post && G.post.lgChamp.includes(T.id), champ: G.post && G.post.champ === T.id, po: LG.mlb ? postResult(T.id) : null, att: F.att.tot, net: Math.round(yearTotal('rev') - yearTotal('exp')), trust: G.owner.trust });
   G.owner.review = review;
   if (G.user.ownerMode !== 'none' && G.owner.trust <= (G.user.ownerMode === 'hard' ? 10 : 5)) {
     G.gameOver = { y: G.year, why: 'オーナーの信頼を失い、球団社長を解任されました' };
@@ -388,18 +411,20 @@ function yearEnd() {
   for (const T2 of G.teams) { if (!isUser(T2.id)) { T2.payBudget = aiPayBudget(T2); T2.facLv = clamp(T2.facLv + (chance(0.15) ? 1 : 0), 1, 5); } }
   newYear();
 }
-function expectedRank() { const st = uT().star; const pol = G.user.policy; let e = [0, 2, 3, 3.5, 4.5, 5][st]; if (pol === 'win') e -= 1; if (pol === 'dev') e += 0.5; return Math.round(clamp(e, 1, 6)); }
-function expectedNet() { const st = uT().star; return [0, 200000, 100000, 30000, -60000, -90000][st] * (G.user.policy === 'profit' ? 1.2 : 1) + (G.user.policy === 'profit' ? 30000 : 0); }
+function expectedRank() { const st = uT().star; const pol = G.user.policy; let e = (LG.mlb ? [0, 1.5, 2, 3, 3.5, 4][st] : [0, 2, 3, 3.5, 4.5, 5][st]); if (pol === 'win') e -= 1; if (pol === 'dev') e += 0.5; return Math.round(clamp(e, 1, LG.mlb ? 5 : 6)); }
+function expectedNet() { const st = uT().star; return (LG.mlb ? [0, 60000, 40000, 15000, 0, -20000] : [0, 200000, 100000, 30000, -60000, -90000])[st] * (G.user.policy === 'profit' ? 1.2 : 1) + (G.user.policy === 'profit' ? 30000 : 0); }
 function allowedDeficit() { const st = uT().star; return Math.round([0, 0, 0, 30000, 60000, 90000][st] * POLICIES[G.user.policy].budget); }
 function ownerReview(net) {
   const T = uT(); const F = G.fin; const pol = G.user.policy;
   const rank = T.lastRank; const champ = G.post && G.post.champ === T.id; const lgc = G.post && G.post.lgChamp.includes(T.id);
   let d = 0; const notes = [];
-  if (champ) { d += 12; notes.push(['日本一', 12]); }
+  if (champ) { d += 12; notes.push([LG.champ, 12]); }
   if (lgc) { d += 8; notes.push(['リーグ優勝', 8]); }
+  if (LG.mlb && G.post && G.post.divChamp && G.post.divChamp.includes(T.id)) { d += 4; notes.push(['地区優勝', 4]); }
+  else if (LG.mlb && G.post && G.post.field && G.post.field.includes(T.id)) { d += 3; notes.push(['ポストシーズン進出', 3]); }
   const exp = expectedRank();
   const rv = Math.round(clamp((exp - rank) * (pol === 'win' ? 2.5 : pol === 'dev' ? 1.2 : 2), -10, 8));
-  if (!lgc || rv > 0) { d += rv; notes.push([rank + '位（期待は' + exp + '位前後）', rv]); }
+  if (!lgc || rv > 0) { d += rv; notes.push([rankStr(rank) + '（期待は' + exp + '位前後）', rv]); }
   const allow = allowedDeficit();
   const expNet = expectedNet();
   const fv = Math.round(clamp((net - expNet) / 100000 * 3, -10, 5)); d += fv; notes.push([net >= expNet ? (net >= 0 ? '黒字経営' : '赤字は許容範囲内') : (net >= 0 ? '黒字だが目標に届かず' : '想定以上の赤字'), fv]);
@@ -435,7 +460,7 @@ function newYearStart() {
   G.yearPending = 0;
   if (G.project && G.project.ready) openNewStadium();
   genSchedule();
-  genDraftClass();
+  if (!LG.mlb || !G.prospects.length) genDraftClass();
   fcRenewal();
   hofVote();
   G.budget = Object.assign(defaultBudget(uT()), G.budget);
@@ -464,9 +489,9 @@ function setPlan(keys) {
 function goalProgress(g) {
   const T = uT();
   switch (g.k) {
-    case 'pennant': return T.lastRank === 1 && G.post ? 1 : 0;
+    case 'pennant': return LG.mlb ? (G.post && G.post.lgChamp.includes(T.id) ? 1 : 0) : (T.lastRank === 1 && G.post ? 1 : 0);
     case 'gs': return G.post && G.post.champ === T.id ? 1 : 0;
-    case 'aclass': return teamRank(T.id) <= 3 ? 1 : 0;
+    case 'aclass': return LG.mlb ? (inPostField(T.id) ? 1 : 0) : (teamRank(T.id) <= 3 ? 1 : 0);
     case 'att': return G.fin.att.tot / g.tgt;
     case 'fc': return G.fc.members / g.tgt;
     case 'profit': return opNet() >= 0 ? 1 : 0;
@@ -497,31 +522,32 @@ function userTasks() {
   const add = (k, text, go, urgent) => out.push({ k, t: text, go, urgent: !!urgent });
   if (G.gameOver) add('over', G.gameOver.why, 'records', true);
   if (t <= 3 && !G.plan.set) add('plan', '中期計画（3か年の目標）を決めましょう', 'plan', true);
-  if (t <= 3 && !G.camp) add('camp', '2月の春季キャンプの場所と方針を決めましょう', 'camp', t === 3);
+  if (t <= 3 && !G.camp) add('camp', LG.mlb ? '2月のスプリングトレーニングの場所と方針を決めましょう' : '2月の春季キャンプの場所と方針を決めましょう', 'camp', t === 3);
   if (t <= 2) add('budget', '今年の予算を確認しましょう', 'finance');
   const sh = shihai(ut).length;
-  if (sh > LIM.shihai) add('limit', `支配下登録が${sh}人です。2月までに70人以内にしてください`, 'contracts', true);
+  if (sh > LIM.shihai) add('limit', `支配下登録が${sh}人です。2月までに${LIM.shihai}人以内にしてください`, 'contracts', true);
+  if (LG.mlb) { const mi = rosterLv(ut, 3).length; if (mi > LIM.ikusei) add('limit3', `マイナー契約の選手が${mi}人です。2月までに${LIM.ikusei}人以内にしてください`, 'contracts', t >= 0 && t <= 3); if (sh < 34 && t >= 44) add('few40', `40人枠が${sh}人です。マイナーの有望株を登録するか、補強しましょう`, 'contracts'); }
   const f1 = rosterLv(ut, 1);
   if (f1.length > LIM.first) add('first', `1軍登録が${f1.length}人です（上限${LIM.first}人）`, 'roster', true);
-  if (firstFrnCount(ut) > LIM.frn1) add('frn', `1軍の外国人が${firstFrnCount(ut)}人です（上限4人）`, 'roster', true);
+  if (!LG.mlb && firstFrnCount(ut) > LIM.frn1) add('frn', `1軍の外国人が${firstFrnCount(ut)}人です（上限4人）`, 'roster', true);
   const inj1 = f1.filter(p => p.injW > 0);
   if (inj1.length) add('inj', `1軍に故障者が${inj1.length}人います`, 'roster');
-  if (f1.length < 25 && t >= SEASON_START && t <= 38) add('few', `1軍登録が${f1.length}人と少なくなっています`, 'roster');
+  if (f1.length < LIM.first - (LG.mlb ? 1 : 4) && t >= SEASON_START && t <= 38) add('few', `1軍登録が${f1.length}人と少なくなっています`, 'roster');
   if (G.pending.length) add('event', `判断が必要な出来事が${G.pending.length}件あります`, 'event', true);
   if (G.compPending && G.compPending.length) add('comp', 'FA移籍の補償（金銭か人的補償か）を選んでください', 'fa', true);
-  if (t === 39 && G.draft && G.draft.stage !== 'done') add('draft', 'ドラフト会議が開かれています', 'draft', true);
-  if (t >= 33 && t <= 38) add('draftprep', '10月第4週はドラフト会議。指名候補を確認しましょう', 'scout');
+  if (t === LG.draftT && G.draft && G.draft.stage !== 'done') add('draft', LG.mlb ? 'ドラフトが開かれています' : 'ドラフト会議が開かれています', 'draft', true);
+  if (LG.mlb ? (t >= 20 && t < LG.draftT) : (t >= 33 && t <= 38)) add('draftprep', LG.mlb ? '7月第3週はドラフト。指名候補を確認しましょう' : '10月第4週はドラフト会議。指名候補を確認しましょう', 'scout');
   if (t >= 40 && t <= 43 && G.faMarket.some(f => !f.done)) add('fa', `FA市場に${G.faMarket.filter(f => !f.done).length}人。獲得交渉ができます`, 'fa');
   if (t === 40) add('release', '戦力外通告の時期です。来季の構想から外れる選手を整理しましょう', 'contracts');
   if (t >= 44 && t <= 47) { const n = renewalList().length; if (n) add('renew', `契約更改が${n}人残っています（12月第4週で締切）`, 'contracts', t >= 46); }
-  if (t >= 44 || t <= 1) if (G.foreign.length) add('frn2', '外国人選手の補強を検討できます', 'foreign');
+  if (t >= 44 || t <= 1) if (G.foreign.length) add('frn2', LG.mlb ? '日本や韓国などの海外選手を獲得できます' : '外国人選手の補強を検討できます', 'foreign');
   if (G.sponsors.offers.length) { const rn = G.sponsors.offers.filter(o => o.renew).length; add('sponsor', `スポンサー・広告の提案が${G.sponsors.offers.length}件届いています${rn ? `（うち契約更新${rn}件）` : ''}。広告料は交渉できます`, 'sponsor'); }
   if (G.naming.offers.length) add('naming', `ネーミングライツの提案が${G.naming.offers.length}件届いています`, 'sponsor');
   if (G.fin.cash < 0) add('cash', '資金がマイナスです。融資や経費削減を検討してください', 'finance', true);
   if (G.owner.trust < 20) add('trust', 'オーナーの信頼が低下しています', 'plan', true);
   if (t >= 40 && G.user.lastSeenWinter !== G.year && t <= 46) add('winter', '若手をウィンターリーグへ派遣できます（12月）', 'training');
-  if ((G.mlbTry || []).some(x => isUser(x.from))) add('mlb', 'メジャー球団と交渉中の選手がいます。結果はお知らせで届きます', 'fa');
-  if (t >= 28 && t <= 38) { const ph = phenomOf(); if (ph) add('phenom', `「10年に一度の逸材」${ph.name}（${ph.pr.school}）がドラフト候補にいます`, 'scout'); }
+  if (!LG.mlb && (G.mlbTry || []).some(x => isUser(x.from))) add('mlb', 'メジャー球団と交渉中の選手がいます。結果はお知らせで届きます', 'fa');
+  if (LG.mlb ? (t >= 14 && t < LG.draftT) : (t >= 28 && t <= 38)) { const ph = phenomOf(); if (ph) add('phenom', `「10年に一度の逸材」${ph.name}（${ph.pr.school}）がドラフト候補にいます`, 'scout'); }
   if (G.week <= 2) {
     const pm = G.month === 1 ? 12 : G.month - 1;
     const season = Object.entries(TOWN_EVENTS).filter(([k, d]) => d.months && d.months.includes(G.month) && !d.months.includes(pm) && eventCanHost(k).ok);
@@ -542,6 +568,7 @@ function serialize() {
 function deserialize(str) {
   const o = JSON.parse(str);
   G = o.G; RNG = o.RNG >>> 0 || 1;
+  setLeague(G.mode || 'npb');
   NAMESET = new Set();
   for (const id in G.players) NAMESET.add(G.players[id].name);
   for (const p of G.prospects) NAMESET.add(p.name);
@@ -553,6 +580,8 @@ function deserialize(str) {
 }
 /* 古いセーブを今の仕組みに合わせる */
 function migrateSave() {
+  setLeague(G.mode || 'npb'); G.mode = LG.mode;
+  for (const T of G.teams) { T.titles = T.titles || { lg: 0, gs: 0 }; if (T.titles.div == null) T.titles.div = 0; if (T.div == null) T.div = 0; }
   G.notes = G.notes || []; G.noteSeq = G.noteSeq || 0; G.mlbTry = G.mlbTry || []; G.mlbAway = G.mlbAway || []; G.mlb = G.mlb || [];
   G.celeQ = G.celeQ || [];
   if (!G.recs) seedHistory(true);

@@ -2,6 +2,7 @@
    画面の土台：描画・イベント・モーダル・表・グラフ
    ========================================================= */
 const DOC_TITLE = '球団社長 プロ野球経営シミュレーション';
+function docTitle() { return LG.mlb ? '球団社長 メジャーリーグ経営シミュレーション' : DOC_TITLE; }
 const UI = { screen: 'title', tab: {}, sort: {}, modal: null, mq: [], navOpen: false, busy: null, sel: {}, flip: false, lastDate: '',
   title: { step: 0, team: null, name: '', nick: '', policy: 'balance' }, f: {} };
 const ACT = {};
@@ -23,13 +24,38 @@ function applyTheme() {
   if (T) { r.setProperty('--team', T.color); r.setProperty('--team2', T.color2); r.setProperty('--team-ink', contrastInk(T.color)); r.setProperty('--team-soft', hexA(T.color, 0.16)); }
 }
 
+/* ---------- メジャー版の言葉と通貨 ----------
+   画面の文字をまとめて置き換える（1軍→メジャー、日本一→ワールドチャンピオン、○万円→○万ドル など） */
+const MLB_TERMS = [
+  ['プレーオフ1st', 'ワイルドカードシリーズ'], ['プレーオフ最終', 'リーグ優勝決定シリーズ'], ['プレーオフ', 'ポストシーズン'], ['グランドシリーズ', 'ワールドシリーズ'],
+  ['日本一', 'ワールドチャンピオン'], ['交流戦', 'インターリーグ'], ['ペナントレース', 'レギュラーシーズン'], ['公式戦', 'レギュラーシーズン'],
+  ['春季キャンプ', 'スプリングトレーニング'], ['秋季キャンプ', '秋季教育リーグ'], ['1軍登録', 'メジャー登録'], ['1軍', 'メジャー'], ['2軍監督', 'マイナー監督'], ['2軍', 'マイナー'],
+  ['支配下登録', '40人枠登録'], ['支配下選手', '40人枠の選手'], ['支配下枠', '40人枠'], ['支配下', '40人枠'], ['育成選手', 'マイナー契約の選手'], ['育成契約', 'マイナー契約'],
+  ['育成枠', 'マイナー契約枠'], ['育成ドラフト', 'ドラフト'], ['外国人・トライアウト', '海外選手・自由契約'], ['外国人選手', '海外選手'], ['新外国人', '海外からの新戦力'], ['外国人', '海外選手'],
+  ['トライアウト', '自由契約'], ['ドラフト会議', 'ドラフト'], ['親会社', 'オーナーグループ'], ['12球団', '30球団'], ['11球団', '29球団'], ['143試合', '162試合'], ['毎週6試合', '毎週6〜7試合'],
+  ['Aクラス', 'ポストシーズン進出'], ['甲子園', '全米大会'], ['日本代表', 'アメリカ代表'], ['ゴールデンアーム賞', '最優秀投手賞'], ['ゴールデングラブ賞', '最優秀守備賞'],
+  ['宣言残留', '再契約'], ['戦力外通告', '戦力外（DFA）'], ['FA権を行使', 'FAに'], ['ファーム', 'マイナー']
+];
+const MLB_MAP = {}; for (const [a, b] of MLB_TERMS) MLB_MAP[a] = b;
+const MLB_RE = new RegExp(MLB_TERMS.map(x => x[0]).sort((a, b) => b.length - a.length).map(x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
+function numOf(s) { return +String(s).replace(/,/g, ''); }
+function mlbText(s) {
+  if (!LG.mlb || !s) return s;
+  return String(s).replace(MLB_RE, m => MLB_MAP[m])
+    .replace(/(\d[\d,]*(?:\.\d+)?)億(\d[\d,]*)万円/g, (m, a, b) => fmtSal(numOf(a) * 10000 + numOf(b)))
+    .replace(/(\d[\d,]*(?:\.\d+)?)億円/g, (m, a) => fmtOku(numOf(a) * 10000))
+    .replace(/(\d[\d,]*(?:\.\d+)?)万円/g, (m, a) => fmtOku(numOf(a)))
+    .replace(/(\d[\d,]*)円/g, (m, a) => fmtPrice(numOf(a)));
+}
+
 /* ---------- 部品 ---------- */
 function emblem(T, size) {
   size = size || 40; const ink = contrastInk(T.color);
   return `<svg class="emb" width="${size}" height="${size}" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="19" fill="${T.color2}"/><circle cx="20" cy="20" r="15.5" fill="${T.color}"/>` +
     `<path d="M8 25 Q20 31 32 25" stroke="${hexA(ink === '#ffffff' ? '#ffffff' : '#000000', .35)}" stroke-width="1.2" fill="none"/>` +
-    `<text x="20" y="21.5" text-anchor="middle" dominant-baseline="middle" font-family="Dela Gothic One, sans-serif" font-size="17" fill="${ink}">${esc(T.kanji)}</text></svg>`;
+    `<text x="20" y="21.5" text-anchor="middle" dominant-baseline="middle" font-family="Dela Gothic One, sans-serif" font-size="${String(T.kanji || '').length >= 2 ? 12.5 : 17}" fill="${ink}">${esc(T.kanji)}</text></svg>`;
 }
+function lv3Name() { return LG.mlb ? 'マイナー契約' : '育成'; }
 function gr(v) { if (v == null) return '<span class="gr Q">?</span>'; const g = grade(v); return `<span class="gr ${g}">${g}</span>`; }
 function av(v, k) { if (v == null) return '<span class="av"><span class="gr Q">?</span><span class="n faint">–</span></span>'; if (k === 'vel') return `<span class="num">${Math.round(v)}</span>`; return `<span class="av">${gr(v)}<span class="n">${Math.round(v)}</span></span>`; }
 function pLink(p) { if (!p) return '<span class="faint">（退団）</span>'; return `<a class="pl" data-a="player" data-id="${p.id}">${esc(p.name)}</a>`; }
@@ -39,7 +65,7 @@ function formTag(f) { const c = f === 2 ? 'f2' : f === 1 ? 'f1' : f === 0 ? 'f0'
 function morDot(m) { return `<span class="dot ${m >= 65 ? 'b' : m >= 40 ? 's' : 'o'}" title="やる気 ${Math.round(m)}"></span>`; }
 function statusTag(p) {
   if (p.injW > 0) return `<span class="tag o">故障 ${Math.ceil(p.injW)}週</span>`;
-  if (p.lv === 3) return '<span class="tag">育成</span>';
+  if (p.lv === 3) return `<span class="tag">${lv3Name()}</span>`;
   return '';
 }
 function stars(n) { return '<span class="stars">' + '★'.repeat(n) + '<span class="faint">' + '★'.repeat(5 - n) + '</span></span>'; }
@@ -115,7 +141,7 @@ const NAV = [
 function navBadge(k) {
   const t = curTurn();
   if (k === 'contracts' && t >= 44) { const n = renewalList().length; return n || 0; }
-  if (k === 'draft' && t === 39 && G.draft && G.draft.stage !== 'done') return '!';
+  if (k === 'draft' && t === LG.draftT && G.draft && G.draft.stage !== 'done') return '!';
   if (k === 'fa' && ((G.compPending && G.compPending.length) || (t >= 41 && t <= 43 && G.faMarket.some(f => !f.done)))) return G.compPending.length ? '!' : G.faMarket.filter(f => !f.done).length;
   if (k === 'home' && G.pending.length) return G.pending.length;
   if (k === 'sponsor' && (G.sponsors.offers.length || G.naming.offers.length)) return G.sponsors.offers.length + G.naming.offers.length;
@@ -127,8 +153,8 @@ function renderNav() {
 }
 function renderHeader() {
   const T = uT(); const R = T.rec; const t = curTurn();
-  const inSeason = t >= SEASON_START && t <= 38;
-  const rk = inSeason || t >= 35 ? teamRank(T.id) + '位' : (T.lastRank ? '昨季' + T.lastRank + '位' : '');
+  const inSeason = t >= SEASON_START && t <= LG.postEnd;
+  const rk = inSeason || t >= 35 ? teamRank(T.id) + '位' : (T.lastRank ? '昨季' + rankStr(T.lastRank) : '');
   const mini = `<div class="sb-mini">資金 <b>${fmtOku(G.fin.cash, 1).replace('円', '')}</b>　人気 <b>${Math.round(T.pop)}</b>　信頼 <b>${Math.round(G.owner.trust)}</b></div>`;
   const rec = inSeason ? `${R.w}勝${R.l}敗${R.d ? R.d + '分' : ''}` : '';
   const ds = [G.year, G.month, G.week];
@@ -137,7 +163,7 @@ function renderHeader() {
   const cash = G.fin.cash;
   return `<header class="sb">
     <button class="sb-menu" data-a="menu" aria-label="メニューを開く">☰</button>
-    <div class="sb-team" data-a="nav" data-v="home">${emblem(T, 42)}<div><div class="sb-name">${esc(tName(T.id))}</div><div class="sb-sub">${LEAGUES[T.league]}　${rk} ${rec}</div></div></div>
+    <div class="sb-team" data-a="nav" data-v="home">${emblem(T, 42)}<div><div class="sb-name">${esc(tName(T.id))}</div><div class="sb-sub">${esc(grpName(grpOf(T)))}　${rk} ${rec}</div></div></div>
     <div class="sb-date" aria-label="${nowStr()}"><span class="lit ${flip ? 'flip' : ''}">${G.year}</span><span class="sl">年</span><span class="lit ${flip ? 'flip' : ''}">${G.month}</span><span class="sl">月</span><span class="lit ${flip ? 'flip' : ''}">${G.week}</span><span class="sl">週</span><span class="sb-phase">${phaseLabel()}</span>${mini}</div>
     <div class="sb-read">
       <div class="rd"><span class="rk">資金</span><span class="rv ${cash < 0 ? 'neg' : ''}">${fmtOku(cash, cash >= 100000 ? 1 : 2).replace('円', '')}</span></div>
@@ -160,10 +186,10 @@ function render() {
 function renderNow() {
   const app = document.getElementById('app');
   applyTheme();
-  if (!G || UI.screen === 'title') { document.title = DOC_TITLE; app.innerHTML = SCREENS.title(); renderModalRoot(); if (UI.resetScroll) { window.scrollTo(0, 0); UI.resetScroll = false; } return; }
-  const un = unreadNotes(); document.title = (un ? `(${un}) ` : '') + DOC_TITLE;
+  if (!G || UI.screen === 'title') { document.title = docTitle(); app.innerHTML = mlbText(SCREENS.title()); renderModalRoot(); if (UI.resetScroll) { window.scrollTo(0, 0); UI.resetScroll = false; } return; }
+  const un = unreadNotes(); document.title = (un ? `(${un}) ` : '') + docTitle();
   const y = window.scrollY;
-  app.innerHTML = renderHeader() + `<div class="wrap">${renderNav()}${UI.navOpen ? '<div class="navback" data-a="menu"></div>' : ''}<main class="main" id="main">${renderScreen()}</main></div>`;
+  app.innerHTML = mlbText(renderHeader() + `<div class="wrap">${renderNav()}${UI.navOpen ? '<div class="navback" data-a="menu"></div>' : ''}<main class="main" id="main">${renderScreen()}</main></div>`);
   renderModalRoot();
   if (!UI.resetScroll) window.scrollTo(0, y); else { window.scrollTo(0, 0); UI.resetScroll = false; }
 }
@@ -192,7 +218,7 @@ function renderModalRoot() {
   if (!m) { root.innerHTML = ''; document.body.style.overflow = ''; return; }
   const same = UI.lastModal === UI.modal; UI.lastModal = UI.modal;
   const back0 = root.querySelector('.mback'); const keep = same && back0 ? back0.scrollTop : 0;
-  root.innerHTML = `<div class="mback" data-a="mback"><div class="modal ${m.size || ''}${same ? ' still' : ''}" role="dialog" aria-modal="true" aria-label="${esc(String(m.title).replace(/<[^>]*>/g, ''))}"><div class="modal-h"><h3>${m.title}</h3><button class="x" data-a="closeModal" aria-label="閉じる">×</button></div><div class="modal-b">${m.body}</div>${m.foot ? `<div class="modal-f">${m.foot}</div>` : ''}</div></div>`;
+  root.innerHTML = mlbText(`<div class="mback" data-a="mback"><div class="modal ${m.size || ''}${same ? ' still' : ''}" role="dialog" aria-modal="true" aria-label="${esc(String(m.title).replace(/<[^>]*>/g, ''))}"><div class="modal-h"><h3>${m.title}</h3><button class="x" data-a="closeModal" aria-label="閉じる">×</button></div><div class="modal-b">${m.body}</div>${m.foot ? `<div class="modal-f">${m.foot}</div>` : ''}</div></div>`);
   if (keep) root.querySelector('.mback').scrollTop = keep;
   document.body.style.overflow = 'hidden';
 }
@@ -203,7 +229,7 @@ ACT.mback = (el, e) => { if (e.target === el) { closeModal(); render(); } };
 function toast(msg, kind) {
   let root = document.getElementById('toasts');
   if (!root) { root = document.createElement('div'); root.id = 'toasts'; root.className = 'toasts'; root.setAttribute('role', 'status'); document.body.appendChild(root); }
-  const el = document.createElement('div'); el.className = 'toast ' + (kind || ''); el.textContent = msg;
+  const el = document.createElement('div'); el.className = 'toast ' + (kind || ''); el.textContent = mlbText(msg);
   root.appendChild(el);
   while (root.children.length > 3) root.firstChild.remove();
   setTimeout(() => { el.remove(); }, 3400);
@@ -211,7 +237,7 @@ function toast(msg, kind) {
 function busyShow(text) {
   let el = document.getElementById('busy');
   if (!el) { el = document.createElement('div'); el.id = 'busy'; el.className = 'busy'; document.body.appendChild(el); }
-  el.innerHTML = `<div class="busy-box"><div class="small">進行中</div><div><span class="lit">${G.year}</span><span class="sl">年</span><span class="lit">${G.month}</span><span class="sl">月</span><span class="lit">${G.week}</span><span class="sl">週</span></div><div class="small">${esc(text || '')}</div><button class="btn sm" style="margin-top:10px;color:#fff;border-color:rgba(255,255,255,.4)" data-a="stopAhead">止める</button></div>`;
+  el.innerHTML = `<div class="busy-box"><div class="small">進行中</div><div><span class="lit">${G.year}</span><span class="sl">年</span><span class="lit">${G.month}</span><span class="sl">月</span><span class="lit">${G.week}</span><span class="sl">週</span></div><div class="small">${esc(mlbText(text || ''))}</div><button class="btn sm" style="margin-top:10px;color:#fff;border-color:rgba(255,255,255,.4)" data-a="stopAhead">止める</button></div>`;
 }
 function busyHide() { const el = document.getElementById('busy'); if (el) el.remove(); }
 

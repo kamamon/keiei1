@@ -11,7 +11,7 @@ function editPool(who) {
   const out = []; for (const T of G.teams) out.push(...roster(T.id)); return out;
 }
 function whereLabel(p) {
-  if (p.team >= 0) return `${tMark(p.team)} <span class="small muted">${p.lv === 3 ? '育成' : p.lv === 1 ? '1軍' : '2軍'}</span>`;
+  if (p.team >= 0) return `${tMark(p.team)} <span class="small muted">${p.lv === 3 ? lv3Name() : p.lv === 1 ? '1軍' : '2軍'}</span>`;
   return p.team === -2 ? '<span class="small">ドラフト候補</span>' : p.team === -3 ? '<span class="small">外国人候補</span>' : '<span class="small">自由契約</span>';
 }
 SCREENS.edit = () => {
@@ -51,7 +51,7 @@ SCREENS.edit = () => {
       </div>
       <label class="field"><span>名前（空欄なら自動で決めます）</span><input class="inp" maxlength="16" value="${esc(nw.name)}" data-i="nwTxt" data-k="name"></label>
       <button class="btn pri" data-a="nwGo">作って編集する</button>
-      <p class="small muted" style="margin:0">能力は目安から自動で作り、すぐに細かく編集できます。支配下は70人、育成は${LIM.ikusei}人までです。</p></div>`)}
+      <p class="small muted" style="margin:0">能力は目安から自動で作り、すぐに細かく編集できます。支配下は${LIM.shihai}人、育成は${LIM.ikusei}人までです。</p></div>`)}
   </div>`;
 };
 ACT.edWho = el => { UI.f.ed.who = el.value; render(); };
@@ -117,7 +117,7 @@ MODALS.pedit = ({ id }) => {
       ${edFld('人気', edNum('pop', d.pop, 0, 100))}${edFld('やる気', edNum('mor', d.mor, 0, 100))}
       ${edFld('故障のしやすさ', `<input type="range" min="5" max="95" value="${d.inj}" data-i="peRange" data-k="inj" aria-label="故障のしやすさ"><span class="small" id="peInj">${injLabel(d.inj)}</span>`, 'w2')}
     </div>`;
-  const con = onTeam ? `<div class="ed-grid">${edFld('年俸（万円）', edNum('sal', d.sal, 0, 999999, 10))}${edFld('契約の残り年数', edNum('yrs', d.yrs, 1, 10))}${edFld('1軍在籍年数（FA権の計算）', edNum('svc', d.svc, 0, 30), 'w2')}</div>` : '';
+  const con = onTeam ? `<div class="ed-grid">${edFld(`年俸（${moneyUnit()}）`, edNum('sal', moneyShow(d.sal), 0, LG.mlb ? 99999 : 999999, LG.mlb ? 1 : 10))}${edFld('契約の残り年数', edNum('yrs', d.yrs, 1, 10))}${edFld('1軍在籍年数（FA権の計算）', edNum('svc', d.svc, 0, 30), 'w2')}</div>` : '';
   return { title: `選手を編集：${esc(p.name)}`, size: 'wide edit',
     body: `<div class="ed"><div class="ed-col">
       <section class="ed-sec"><h4>基本</h4>${basic}</section>
@@ -136,7 +136,7 @@ function peLive() {
   for (const k of editKeys(d)) { const el = document.querySelector(`[data-gr="${k}"]`); if (el) el.innerHTML = gr(d.a[k]); }
 }
 ACT.peTxt = el => { UI.f.pe[el.dataset.k] = el.value; };
-ACT.peNum = el => { UI.f.pe[el.dataset.k] = +el.value; };
+ACT.peNum = el => { UI.f.pe[el.dataset.k] = el.dataset.k === 'sal' ? moneyFrom(+el.value) : +el.value; };
 ACT.peAttr = el => { const d = UI.f.pe; const [lo, hi] = attrRange(el.dataset.k); d[el.dataset.w][el.dataset.k] = clamp(+el.value || lo, lo, el.dataset.w === 'cap' && el.dataset.k === 'vel' ? 172 : hi); peLive(); };
 ACT.peRange = el => { UI.f.pe.inj = +el.value; const s = $('#peInj'); if (s) s.textContent = injLabel(+el.value); };
 ACT.peSel = el => {

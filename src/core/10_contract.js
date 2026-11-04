@@ -18,6 +18,7 @@ function evalTarget(p) {
 function minSal(p) { return p.lv === 3 ? MIN_SAL_IK : MIN_SAL; }
 function reductionLimit(p) { return p.sal * (p.sal >= 10000 ? 0.6 : 0.75); }
 function calcDemand(p) {
+  if (LG.mlb) return calcDemandMLB(p);
   const prev = Math.max(p.sal, minSal(p)); const t = evalTarget(p);
   let d = prev + (t - prev) * (t >= prev ? 0.7 : 0.45);
   d = clamp(d, prev * (prev >= 10000 ? 0.6 : 0.75), prev * 2.5 + 1000);
@@ -27,18 +28,27 @@ function calcDemand(p) {
   return roundSal(Math.max(d, minSal(p)));
 }
 function teamOffer(p) {
+  if (LG.mlb) return teamOfferMLB(p);
   const prev = Math.max(p.sal, minSal(p)); const t = evalTarget(p);
   let o = prev + (t - prev) * (t >= prev ? 0.5 : 0.7);
   o = clamp(o, prev * (prev >= 10000 ? 0.6 : 0.75), prev * 2.4 + 800);
   return roundSal(Math.max(o, minSal(p)));
 }
-function maxYears(p) { return (p.age >= 26 || p.svc >= 5) && p.lv !== 3 ? 5 : 1; }
-function demandFor(p, yrs) { const d = p.ren.dem; if (yrs <= 1) return d; return roundSal(d * (p.age >= 31 ? (1 - 0.03 * (yrs - 1)) : (1 + 0.02 * (yrs - 1)))); }
+function maxYears(p) { if (LG.mlb) return p.lv === 3 ? 1 : p.age <= 30 ? 8 : p.age <= 33 ? 5 : 2; return (p.age >= 26 || p.svc >= 5) && p.lv !== 3 ? 5 : 1; }
+function demandFor(p, yrs) { const d = p.ren.dem; if (yrs <= 1) return d; if (LG.mlb) return roundSal(demandForMLB(p, yrs, d)); return roundSal(d * (p.age >= 31 ? (1 - 0.03 * (yrs - 1)) : (1 + 0.02 * (yrs - 1)))); }
 function teamPayroll(tid, next) { return sum(roster(tid), p => next && p.ren && p.ren.st === 'signed' ? p.ren.sal : p.sal); }
 
 function openRenewals() {
   for (const p of roster(G.user.tid)) {
-    if (p.yrs <= 1 && !(p.ren && p.ren.st === 'signed')) p.ren = { st: 'pending', dem: calcDemand(p), off: teamOffer(p), yrs: 1, tries: 0 };
+    if (p.yrs > 1 || (p.ren && p.ren.st === 'signed')) continue;
+    if (LG.mlb) {
+      const c = svcClass(p);
+      if (c === 'minor') { p.ren = { st: 'signed', sal: MIN_SAL_IK, yrs: 1, auto: true }; continue; }
+      if (c === 'pre') { p.ren = { st: 'signed', sal: preArbSal(p), yrs: 1, auto: true }; continue; }
+      p.ren = { st: 'pending', dem: calcDemand(p), off: teamOffer(p), yrs: 1, tries: 0, arb: true };
+      continue;
+    }
+    p.ren = { st: 'pending', dem: calcDemand(p), off: teamOffer(p), yrs: 1, tries: 0 };
   }
 }
 function renewalList() { return roster(G.user.tid).filter(p => p.ren && p.ren.st !== 'signed' && !p.ren.rookie); }
@@ -46,7 +56,7 @@ function startExtension(p) {
   if (p.ren && p.ren.st === 'signed') return;
   p.ren = { st: 'pending', dem: roundSal(calcDemand(p) * (faEligibleSoon(p) ? 1.12 : 1.04)), off: teamOffer(p), yrs: Math.min(3, maxYears(p)), tries: 0, ext: true };
 }
-function faEligibleSoon(p) { const need = p.faUsed ? p.faUsed + 4 : 8; return !p.frn && p.svc + 1 >= need; }
+function faEligibleSoon(p) { if (LG.mlb) return p.lv !== 3 && (p.intlFA || p.svc + 1 >= LG.faYears); const need = p.faUsed ? p.faUsed + 4 : 8; return !p.frn && p.svc + 1 >= need; }
 function negotiate(p, offer, yrs) {
   const R = p.ren; if (!R || R.st === 'signed') return { res: 'none' };
   yrs = clamp(yrs || 1, 1, maxYears(p));
@@ -73,7 +83,14 @@ function applyContractsYearEnd() {
     const R = p.ren;
     if (R && R.st === 'signed') { p.sal = R.sal; p.yrs = R.yrs; }
     else if (p.yrs <= 1) {
-      if (R && isUser(T.id)) {
+      if (R && isUser(T.id) && LG.mlb) {
+        // 年俸調停の公聴会：選手側と球団側の額のどちらかに決まる
+        const truth = arbFair(p) * rf(0.95, 1.05); const mid = (R.dem + R.off) / 2;
+        const win = chance(clamp(0.5 + (truth - mid) / Math.max(1, R.dem - R.off), 0.2, 0.8));
+        p.sal = win ? R.dem : R.off; p.yrs = 1; p.mor = clamp(p.mor + (win ? 2 : -8), 0, 100);
+        addNews('contract', `${p.name}の年俸調停は${win ? '選手側' : '球団側'}の主張が通り、${fmtSal(p.sal)}に決まりました`, { tid: T.id });
+        arb.push(p.name + (win ? '（選手側）' : '（球団側）'));
+      } else if (R && isUser(T.id)) {
         const s = roundSal(((R.lastOff || R.off) + R.dem) / 2);
         p.sal = s; p.yrs = 1; p.mor = clamp(p.mor - 8, 0, 100);
         addNews('contract', `${p.name}は年俸調停の結果${fmtSal(s)}で決着`, { tid: T.id });
@@ -82,9 +99,10 @@ function applyContractsYearEnd() {
     } else p.yrs--;
     p.ren = null;
   }
-  if (arb.length) notify('contract', `契約更改で合意できなかった${arb.length}人は、年俸調停で決着しました（${arb.slice(0, 5).join('、')}${arb.length > 5 ? 'ほか' : ''}）。やる気が少し下がっています`, { go: 'contracts', tab: 'pay' });
+  if (arb.length) notify('contract', LG.mlb ? `合意できなかった${arb.length}人の年俸は、調停の公聴会で決まりました：${arb.slice(0, 5).join('、')}${arb.length > 5 ? 'ほか' : ''}` : `契約更改で合意できなかった${arb.length}人は、年俸調停で決着しました（${arb.slice(0, 5).join('、')}${arb.length > 5 ? 'ほか' : ''}）。やる気が少し下がっています`, { go: 'contracts', tab: 'pay' });
 }
 function aiRenewals(tid) {
+  if (LG.mlb) return aiRenewalsMLB(tid);
   const T = G.teams[tid];
   for (const p of roster(tid)) {
     if (p.yrs > 1 || (p.ren && p.ren.st === 'signed')) continue;
@@ -119,8 +137,8 @@ function releasePlayer(p, quiet) {
 function signFree(id) {
   const p = P_(id); const ut = G.user.tid;
   if (!p || p.team !== -1) return { ok: false, why: '契約できません' };
-  if (shihai(ut).length >= LIM.shihai) return { ok: false, why: '支配下登録が70人に達しています' };
-  if (curTurn() > 27 && curTurn() < 36) return { ok: false, why: '7月末以降は新たに支配下登録できません' };
+  if (shihai(ut).length >= LIM.shihai) return { ok: false, why: `支配下登録が${LIM.shihai}人に達しています` };
+  if (!LG.mlb && curTurn() > 27 && curTurn() < 36) return { ok: false, why: '7月末以降は新たに支配下登録できません' };
   G.fapool = G.fapool.filter(x => x !== id);
   const ask = p.fa ? p.fa.ask : MIN_SAL;
   addToTeam(p, ut, 2);
@@ -132,20 +150,21 @@ function signFree(id) {
 }
 function promoteIkusei(p) {
   if (p.lv !== 3) return { ok: false };
-  if (shihai(p.team).length >= LIM.shihai) return { ok: false, why: '支配下登録が70人に達しています' };
-  if (curTurn() > 27 && curTurn() < 40) return { ok: false, why: '支配下登録は7月末までです' };
+  if (shihai(p.team).length >= LIM.shihai) return { ok: false, why: `支配下登録が${LIM.shihai}人に達しています` };
+  if (!LG.mlb && curTurn() > 27 && curTurn() < 40) return { ok: false, why: '支配下登録は7月末までです' };
   p.lv = 2; p.ikusei = false; p.num = -1; assignNumber(p, p.team);
   if (p.sal < MIN_SAL) p.sal = MIN_SAL;
   if (p.ren && p.ren.sal < MIN_SAL) p.ren.sal = MIN_SAL;
   p.mor = clamp(p.mor + 15, 0, 100);
-  if (isUser(p.team)) addNews('contract', `育成の${p.name}を支配下登録しました（背番号${p.num}）`, { tid: p.team, important: true, note: false });
+  if (isUser(p.team)) addNews('contract', LG.mlb ? `マイナー契約の${p.name}を40人枠に登録しました（背番号${p.num}）` : `育成の${p.name}を支配下登録しました（背番号${p.num}）`, { tid: p.team, important: true, note: false });
   return { ok: true };
 }
 
 /* ---------- FA ---------- */
-function faEligible(p) { const need = p.faUsed ? p.faUsed + 4 : 8; return !p.frn && p.svc >= need && p.yrs <= 1 && !(p.ren && p.ren.st === 'signed') && p.lv !== 3; }
+function faEligible(p) { if (LG.mlb) return (p.svc >= LG.faYears || p.intlFA) && p.yrs <= 1 && !(p.ren && p.ren.st === 'signed') && p.lv !== 3; const need = p.faUsed ? p.faUsed + 4 : 8; return !p.frn && p.svc >= need && p.yrs <= 1 && !(p.ren && p.ren.st === 'signed') && p.lv !== 3; }
 function faRank(p) { const ss = shihai(p.team).filter(x => !x.frn).sort((a, b) => b.sal - a.sal); const i = ss.indexOf(p); return i < 3 ? 'A' : i < 10 ? 'B' : 'C'; }
 function declareFA(mlbBack) {
+  if (LG.mlb) return declareFAMLB();
   G.faMarket = []; G.compPending = G.compPending || [];
   for (const T of G.teams) for (const p of shihai(T.id)) {
     if (!faEligible(p) || mlbTrying(p)) continue;
@@ -181,16 +200,17 @@ function faNeed(T, p) {
 }
 function pendingFASpend(tid) { return sum(G.faMarket.filter(f => !f.done && f.offers[tid]), f => f.offers[tid].sal); }
 function aiFABids() {
+  if (LG.mlb) return aiFABidsMLB();
   for (const f of G.faMarket.filter(x => !x.done)) {
     const p = P_(f.id); if (!p) continue;
     for (const T of G.teams) {
       if (isUser(T.id) || f.offers[T.id]) continue;
       const room = T.payBudget - teamPayroll(T.id, true) - pendingFASpend(T.id);
-      if (room < f.ask * 0.8) continue;
       const o = ovr(p);
+      if (room < f.ask * 0.8) continue;
       const base = (o - 62) / 20 + faNeed(T, p) + (f.from === T.id || f.prev === T.id ? 0.35 : 0) + (T.market - 3) * 0.08 - (p.age >= 33 ? 0.2 : 0);
       if (!chance(clamp(base, 0, 0.85))) continue;
-      f.offers[T.id] = { sal: roundSal(f.ask * rf(0.92, 1.12) * (1 + (T.market - 3) * 0.03)), yrs: clamp(f.askYrs + ri(-1, 1), 1, 5) };
+      f.offers[T.id] = { sal: roundSal(f.ask * rf(0.92, 1.12) * (1 + (T.market - 3) * 0.03)), yrs: clamp(f.askYrs + ri(-1, 1), 1, LG.maxYrs || 5) };
     }
   }
 }
@@ -208,7 +228,9 @@ function faUtility(p, f, o) {
 function faDecide(final) {
   for (const f of G.faMarket.filter(x => !x.done)) {
     const p = P_(f.id); if (!p) { f.done = true; continue; }
-    const offers = Object.entries(f.offers).map(([tid, o]) => ({ tid: +tid, sal: o.sal, yrs: o.yrs }));
+    let offers = Object.entries(f.offers).map(([tid, o]) => ({ tid: +tid, sal: o.sal, yrs: o.yrs }));
+    // メジャー版：ほかのFAと契約して予算を使い切った球団の提示は取り下げ
+    if (LG.mlb) offers = offers.filter(o => isUser(o.tid) || G.teams[o.tid].payBudget * 1.12 - teamPayroll(o.tid, true) >= o.sal);
     if (!offers.length) { if (final) faNoOffer(f, p); continue; }
     if (!final && (offers.length < 2 || chance(0.5))) continue;
     const best = maxBy(offers, o => faUtility(p, f, o));
@@ -219,7 +241,7 @@ function faDecide(final) {
 function faSign(f, p, o) {
   f.done = true; f.to = o.tid;
   addToTeam(p, o.tid, 2);
-  p.ren = { st: 'signed', sal: o.sal, yrs: o.yrs, faNew: true }; p.fa = null;
+  p.ren = { st: 'signed', sal: o.sal, yrs: o.yrs, faNew: true }; p.fa = null; p.intlFA = false;
   if (f.mlb) {
     p.faUsed = p.svc; p.mor = 70;
     addNews('mlb', `メジャー帰りの${p.name}が${tName(o.tid)}と契約（${o.yrs}年・年${fmtSal(o.sal)}）${o.tid === f.prev ? '。古巣に復帰' : ''}`, { important: isUser(o.tid) || isUser(f.prev), tid: o.tid, note: isUser(o.tid) || isUser(f.prev) ? 'hi' : false, pid: p.id });
@@ -228,12 +250,18 @@ function faSign(f, p, o) {
     addNews('fa', `${p.name}が${tName(o.tid)}へFA移籍（${o.yrs}年・年${fmtSal(o.sal)}）`, { important: isUser(o.tid) || isUser(f.from), tid: o.tid, note: isUser(o.tid) || isUser(f.from) ? 'hi' : false, pid: p.id });
     faCompensation(f, o.tid);
   } else {
-    addNews('fa', `${p.name}が${tName(o.tid)}に宣言残留（${o.yrs}年・年${fmtSal(o.sal)}）`, { important: isUser(o.tid), tid: o.tid });
+    addNews('fa', LG.mlb ? `${p.name}が${tName(o.tid)}と再契約（${o.yrs}年・年${fmtSal(o.sal)}）` : `${p.name}が${tName(o.tid)}に宣言残留（${o.yrs}年・年${fmtSal(o.sal)}）`, { important: isUser(o.tid), tid: o.tid });
   }
 }
 function faNoOffer(f, p) {
   f.done = true;
   if (p.age >= 35 && chance(0.6)) { retirePlayer(p); return; }
+  if (LG.mlb) {
+    p.fa = { kind: 'free', from: f.from, ask: roundSal(Math.max(MIN_SAL, f.ask * (ovr(p) >= 68 ? 0.8 : 0.55))), y: G.year };
+    if (!G.fapool.includes(p.id)) G.fapool.push(p.id);
+    if (isUser(f.from) || ovr(p) >= 70) addNews('fa', `${p.name}は年内に契約がまとまらず、FAのまま移籍先を探します`, { tid: f.from, pid: p.id });
+    return;
+  }
   if (f.from < 0) {
     p.fa = { kind: 'free', from: f.prev != null ? f.prev : -1, ask: roundSal(Math.max(MIN_SAL, f.ask * 0.6)), y: G.year };
     if (!G.fapool.includes(p.id)) G.fapool.push(p.id);
@@ -260,7 +288,7 @@ function moveComp(p, toTid) {
   addNews('fa', `人的補償で${p.name}が${tName(from)}から${tName(toTid)}へ移籍`, { important: isUser(from) || isUser(toTid), tid: toTid, note: isUser(from) ? 'hi' : false, pid: p.id });
 }
 function faCompensation(f, toTid) {
-  if (f.rank === 'C') return;
+  if (LG.mlb || f.rank === 'C' || !f.rank) return;
   const fromT = f.from;
   if (isUser(fromT)) { G.compPending.push({ fa: f.id, to: toTid, rank: f.rank, prev: f.prevSal }); return; }
   const best = maxBy(unprotected(toTid), x => pVal(x, fromT));
@@ -275,7 +303,7 @@ function resolveComp(i, pid) {
 }
 function userFAOffer(id, sal, yrs) {
   const f = G.faMarket.find(x => x.id === id && !x.done); if (!f) return false;
-  f.offers[G.user.tid] = { sal: roundSal(sal), yrs: clamp(yrs, 1, 5) };
+  f.offers[G.user.tid] = { sal: roundSal(sal), yrs: clamp(yrs, 1, LG.maxYrs || 5) };
   return true;
 }
 
@@ -315,6 +343,7 @@ function doTrade(tid, give, get, cash) {
 /* ---------- 外国人選手 ---------- */
 const FRN_FROM = ['米メジャー', '米3A', '米3A', '米2A', 'ドミニカ', 'ベネズエラ', 'キューバ', 'メキシコ', '韓国', '台湾', '豪州'];
 function genForeign(n) {
+  if (LG.mlb) return genForeignMLB(n);
   for (let i = 0; i < n; i++) {
     const pos = chance(0.5) ? 'P' : wpick(['1B', '3B', 'OF', '2B', 'SS', 'C'], x => ({ '1B': 30, '3B': 15, OF: 40, '2B': 6, SS: 5, C: 4 })[x]);
     const cur = clamp(rn(64, 8), 48, 86); const age = ri(25, 33);
@@ -342,13 +371,16 @@ function signForeign(id, tid) {
   const off = curTurn() >= 40;
   if (off) { p.sal = 0; p.ren = { st: 'signed', sal: p.fa.ask, yrs: p.fa.yrs }; p.join = G.year + 1; } else { p.sal = p.fa.ask; p.yrs = p.fa.yrs; p.join = G.year; }
   p.adapt = p.adaptT; p.prFrom = p.pr.school; delete p.pr; p.fa = null; p.mor = 65;
-  if (isUser(tid)) addNews('contract', `新外国人${p.name}（${POS_JP[p.pos]}・${p.prFrom}）と年俸${fmtSal(p.sal || p.ren.sal)}で契約`, { important: true, tid, note: false });
+  if (LG.mlb) { p.intlFA = true; p.svc = 0; p.frn = false; }
+  if (isUser(tid)) addNews('contract', LG.mlb ? `${p.prFrom}の${p.name}（${POS_JP[p.pos]}）と${off ? p.ren.yrs : p.yrs}年・年俸${fmtSal(p.sal || p.ren.sal)}で契約` : `新外国人${p.name}（${POS_JP[p.pos]}・${p.prFrom}）と年俸${fmtSal(p.sal || p.ren.sal)}で契約`, { important: true, tid, note: false });
+  else if (LG.mlb && ovr(p) >= 72) addNews('fa', `${tShort(tid)}が${p.prFrom}の${p.name}と契約`, { tid });
   touch();
   return { ok: true };
 }
 
 /* ---------- ポスティングの希望（11月） ---------- */
 function postingRequests() {
+  if (LG.mlb) return;
   for (const T of G.teams) for (const p of shihai(T.id)) {
     if (p.frn || p.lv === 3 || p.svc >= kfaNeed(p) || p.postY === G.year || mlbTrying(p)) continue;
     const o = ovr(p);
@@ -373,7 +405,7 @@ function retireChance(p) {
   let c = 0;
   if (a >= 38) c = 0.35 + (a - 38) * 0.15; else if (a >= 35) c = 0.12 + (a - 35) * 0.08; else if (a >= 32) c = 0.03;
   if (o >= 72) c *= 0.4; else if (o < 45) c = c * 2 + (a >= 30 ? 0.15 : 0);
-  if (p.lv === 3 && a >= 25) c += 0.25;
+  if (p.lv === 3 && a >= (LG.mlb ? 27 : 25)) c += 0.25;
   if (p.team < 0 && a >= 30) c += 0.3;
   return clamp(c, 0, 0.95);
 }

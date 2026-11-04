@@ -6,6 +6,7 @@ const SEASON_START = 11, SEASON_END = 34, MAKEUP_TURN = 35;
 const DOW = ['火', '水', '木', '金', '土', '日'];
 
 function genSchedule() {
+  if (LG.mlb) return genScheduleMLB();
   const L = [[], []]; for (const t of G.teams) L[t.league].push(t.id);
   const circle = ids => { const arr = ids.slice(); const rounds = []; for (let r = 0; r < 5; r++) { const pairs = []; for (let i = 0; i < 3; i++) pairs.push([arr[i], arr[5 - i]]); rounds.push(pairs); arr.splice(1, 0, arr.pop()); } return rounds; };
   const R = [circle(shuffle(L[0].slice())), circle(shuffle(L[1].slice()))];
@@ -39,8 +40,8 @@ function genSchedule() {
   G.sched = { days: days.map(d => d.map(g => ({ h: g.h, a: g.a, done: false }))), makeup: [], mkDays: [] };
   G.day = 0;
 }
-function dayTurn(d) { return SEASON_START + Math.floor(d / 6); }
-function dayLabel(d) { const t = dayTurn(d); const m = Math.floor(t / 4) + 1, w = t % 4 + 1; return m + '月第' + w + '週(' + DOW[d % 6] + ')'; }
+function dayTurn(d) { return SEASON_START + Math.floor(d / (LG.dpw || 6)); }
+function dayLabel(d) { const t = dayTurn(d); const m = Math.floor(t / 4) + 1, w = t % 4 + 1; return m + '月第' + w + '週(' + DOW[d % DOW.length] + ')'; }
 function userSchedule() {
   const uid = G.user.tid; const out = [];
   G.sched.days.forEach((day, d) => { for (const g of day) if (g.h === uid || g.a === uid) out.push({ d, g }); });
@@ -56,8 +57,10 @@ function standings(lg) {
   const top = ts[0].rec;
   return ts.map((t, i) => ({ t, rank: i + 1, gb: ((top.w - t.rec.w) + (t.rec.l - top.l)) / 2 }));
 }
-function teamRank(tid) { const t = G.teams[tid]; return standings(t.league).find(x => x.t.id === tid).rank; }
-function gamesBehind(tid) { const t = G.teams[tid]; return standings(t.league).find(x => x.t.id === tid).gb; }
+/* 順位はリーグ（日本版）／地区（メジャー版）の中で数える */
+function grpTable(g) { return LG.mlb ? grpStandings(g) : standings(g); }
+function teamRank(tid) { const t = G.teams[tid]; return grpTable(grpOf(t)).find(x => x.t.id === tid).rank; }
+function gamesBehind(tid) { const t = G.teams[tid]; return grpTable(grpOf(t)).find(x => x.t.id === tid).gb; }
 function applyRecord(hid, aid, res) {
   const H = G.teams[hid].rec, A = G.teams[aid].rec;
   H.rs += res.hs; H.ra += res.as; A.rs += res.as; A.ra += res.hs;
@@ -100,11 +103,11 @@ function playDay(dayGames, dayIdx, isMakeup) {
   for (const g of dayGames) if (!g.done) playSeasonGame(g, dayIdx, isMakeup);
 }
 function playWeekGames(turn) {
-  const w = turn - SEASON_START;
-  for (let i = 0; i < 6; i++) {
-    const d = w * 6 + i;
+  const w = turn - SEASON_START; const n = LG.dpw || 6;
+  for (let i = 0; i < n; i++) {
+    const d = w * n + i;
     if (d >= G.sched.days.length) break;
-    playDay(G.sched.days[d], d, false);
+    if (G.sched.days[d].length) playDay(G.sched.days[d], d, false); else { G.dayNo++; touch(); }
     G.day = d + 1;
   }
 }
@@ -126,17 +129,18 @@ function playMakeups() {
 /* ---------- ボックススコアの保存（ユーザー試合のみ・最近40試合） ---------- */
 function storeBox(id, res, g, dayIdx, post) {
   G.boxes[id] = { id, h: g.h, a: g.a, hs: res.hs, as: res.as, line: res.line, box: res.box, log: res.log, W: res.W, L: res.L, SV: res.SV,
-    hits: res.hits, errs: res.errs, date: nowStr(), day: typeof dayIdx === 'number' ? DOW[dayIdx % 6] : '', post: !!post, att: g.att || 0 };
+    hits: res.hits, errs: res.errs, date: nowStr(), day: typeof dayIdx === 'number' ? DOW[dayIdx % DOW.length] : '', post: !!post, att: g.att || 0 };
   G.boxOrder.push(id);
   while (G.boxOrder.length > 40) { const old = G.boxOrder.shift(); delete G.boxes[old]; }
 }
 
 /* ---------- プレーオフ ---------- */
 function mkSeries(kind, lg, hi, lo) {
-  const cfg = { cs1: { need: 2, max: 3, adv: 0 }, cs2: { need: 4, max: 6, adv: 1 }, gs: { need: 4, max: 8, adv: 0 } }[kind];
+  const cfg = SERIES_CFG[kind];
   return { kind, lg, hi, lo, w: [cfg.adv, 0], d: 0, need: cfg.need, max: cfg.max, games: [], winner: null };
 }
 function startPost() {
+  if (LG.mlb) return startPostMLB();
   const st = [standings(0), standings(1)];
   G.post = { stage: 'cs1', series: [], lgChamp: [st[0][0].t.id, st[1][0].t.id], champ: null, mvp: null };
   for (let lg = 0; lg < 2; lg++) G.post.series.push(mkSeries('cs1', lg, st[lg][1].t.id, st[lg][2].t.id));
@@ -144,10 +148,12 @@ function startPost() {
 function playSeries(kind) {
   for (const s of G.post.series.filter(x => x.kind === kind && x.winner == null)) {
     let guard = 0;
-    while (s.winner == null && guard++ < 12) {
+    const cfg = SERIES_CFG[kind];
+    while (s.winner == null && guard++ < 16) {
       const gi = s.games.length;
       let h = s.hi, a = s.lo;
       if (kind === 'gs') { const homeHi = [0, 1, 5, 6, 7].includes(gi); h = homeHi ? s.hi : s.lo; a = homeHi ? s.lo : s.hi; }
+      else if (cfg.home) { const homeHi = cfg.home[gi % cfg.home.length] === 1; h = homeHi ? s.hi : s.lo; a = homeHi ? s.lo : s.hi; }
       G.dayNo++; touch();
       const res = playGame(h, a, { rec: false, post: true, dayNo: G.dayNo, box: true, log: true });
       const gid = G.gid++;
@@ -159,12 +165,13 @@ function playSeries(kind) {
       if (!res.tie) { const wt = res.hs > res.as ? h : a; s.w[wt === s.hi ? 0 : 1]++; } else s.d++;
       s.res = s.res || []; s.res.push(res);
       if (s.w[0] >= s.need) s.winner = s.hi; else if (s.w[1] >= s.need) s.winner = s.lo;
-      else if (s.games.length >= s.max) s.winner = kind === 'gs' ? (s.w[0] >= s.w[1] ? s.hi : s.lo) : s.hi;
+      else if (s.games.length >= s.max && !cfg.home) s.winner = kind === 'gs' ? (s.w[0] >= s.w[1] ? s.hi : s.lo) : s.hi;
+      else if (s.games.length >= s.max + 4) s.winner = s.w[0] >= s.w[1] ? s.hi : s.lo;
       else if (kind === 'gs' && s.games.length >= 7 && s.d === 0) s.winner = s.w[0] > s.w[1] ? s.hi : s.lo;
     }
     s.mvp = seriesMvp(s);
     delete s.res;
-    const k = { cs1: 'プレーオフ1st', cs2: 'プレーオフ最終', gs: 'グランドシリーズ' }[kind];
+    const k = cfg.n;
     const wl = s.winner === s.hi ? s.w[0] + '勝' + s.w[1] + '敗' : s.w[1] + '勝' + s.w[0] + '敗';
     addNews('post', `${k}：${tName(s.winner)}が${wl}${s.d ? s.d + '分' : ''}で勝ち抜け`, { important: isUser(s.hi) || isUser(s.lo), tid: s.winner });
   }
@@ -183,6 +190,7 @@ function seriesMvp(s) {
   return best;
 }
 function advancePost(turn) {
+  if (LG.mlb) return advancePostMLB(turn);
   if (turn === 36) {
     playSeries('cs1');
     const st = [standings(0), standings(1)];
@@ -234,7 +242,7 @@ function batWAR(p, s, lb) {
   const wraa = (woba - lb.woba) / 1.2 * s.pa;
   const pos = mainPos(p);
   const posAdj = { C: 12, SS: 7, '2B': 3, '3B': 2, CF: 2.5, LF: -7, RF: -7, '1B': -12, DH: -17 }[pos] || 0;
-  const gf = s.g / 143;
+  const gf = s.g / (LG.games || 143);
   const def = (defVal(p) - 60) * 0.12 * gf - s.e * 0.3;
   const br = s.sb * 0.2 - s.cs * 0.4;
   const repl = 20 * s.pa / 600;
@@ -323,17 +331,17 @@ function decideAwards() {
     const give = (id, n, pop) => { const p = P_(id); if (!p) return; p.awards = p.awards || []; p.awards.push({ y: G.year, n }); p.pop = clamp(p.pop + pop, 0, 100); };
     if (mvp) give(mvp.id, 'MVP', 10);
     if (roy) give(roy.id, '新人王', 8);
-    if (ace) give(ace.id, 'ゴールデンアーム賞', 5);
+    if (ace) give(ace.id, LG.aceAward || 'ゴールデンアーム賞', 5);
     for (const k in b9) [].concat(b9[k]).forEach(id => give(id, 'ベストナイン', 3));
-    for (const k in gg) [].concat(gg[k]).forEach(id => give(id, 'ゴールデングラブ賞', 2));
+    for (const k in gg) [].concat(gg[k]).forEach(id => give(id, LG.glove || 'ゴールデングラブ賞', 2));
   }
   G.awards = res;
   const ut = G.user.tid; const ul = G.teams[ut].league; const A = res[ul];
   const mine = id => { const p = P_(id); return p && p.team === ut ? p : null; };
   if (mine(A.mvp)) addNews('award', `${mine(A.mvp).name}がリーグMVPに輝きました`, { important: true, tid: ut });
   if (mine(A.roy)) addNews('award', `${mine(A.roy).name}が新人王を受賞`, { important: true, tid: ut });
-  if (mine(A.ace)) addNews('award', `${mine(A.ace).name}がゴールデンアーム賞を受賞`, { important: true, tid: ut });
-  const aw = [['MVP', mine(A.mvp)], ['新人王', mine(A.roy)], ['ゴールデンアーム賞', mine(A.ace)]].filter(x => x[1]);
+  if (mine(A.ace)) addNews('award', `${mine(A.ace).name}が${LG.aceAward}を受賞`, { important: true, tid: ut });
+  const aw = [['MVP', mine(A.mvp)], ['新人王', mine(A.roy)], [LG.aceAward, mine(A.ace)]].filter(x => x[1]);
   if (aw.length) G.celeQ.push({ art: 'post', head: '年間表彰', kicker: `${G.year}年 表彰式`, title: aw.length === 1 ? `${aw[0][1].name}が${aw[0][0]}に` : aw.map(x => x[0]).join('・') + 'を受賞', sub: aw.map(x => `${x[0]} ${x[1].name}`).join('　'), body: '表彰式の壇上で、受賞した選手がファンへの感謝を語りました。', pid: aw[0][1].id });
   const b9n = [].concat(...Object.values(A.b9)).map(mine).filter(Boolean);
   if (b9n.length) addNews('award', `ベストナインに${b9n.map(p => p.name).join('、')}が選出`, { tid: ut });
@@ -345,7 +353,7 @@ function archiveSeason() {
   const rec = {
     y: G.year,
     st: st.map(s => s.map(x => ({ tid: x.t.id, w: x.t.rec.w, l: x.t.rec.l, d: x.t.rec.d }))),
-    champ: G.post ? G.post.champ : null, lgChamp: G.post ? G.post.lgChamp : null, mvpGS: G.post ? G.post.mvp : null,
+    champ: G.post ? G.post.champ : null, lgChamp: G.post ? G.post.lgChamp : null, mvpGS: G.post ? G.post.mvp : null, divChamp: G.post && G.post.divChamp ? G.post.divChamp.slice() : null,
     awards: G.awards ? JSON.parse(JSON.stringify(G.awards)) : null, titles: G.seasonTitles || null,
     names: {}
   };
@@ -369,6 +377,7 @@ function archiveSeason() {
 
 /* ---------- 交流戦・オールスター・月間MVP ---------- */
 function interleagueTitle() {
+  if (LG.mlb) return;
   const best = G.teams.slice().sort((a, b) => { const pa = a.rec.il[0] / Math.max(1, a.rec.il[0] + a.rec.il[1]), pb = b.rec.il[0] / Math.max(1, b.rec.il[0] + b.rec.il[1]); return pb - pa || b.rec.il[0] - a.rec.il[0]; })[0];
   addNews('league', `交流戦は${tName(best.id)}が${best.rec.il[0]}勝${best.rec.il[1]}敗で優勝`, { important: isUser(best.id), tid: best.id });
   best.popBonus = (best.popBonus || 0) + 1.5;

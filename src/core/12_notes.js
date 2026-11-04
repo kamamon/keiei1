@@ -23,8 +23,10 @@ function markNotesRead(ids) { for (const x of G.notes || []) if (!ids || ids.inc
 /* 時期ごとの「そろそろ」のお知らせ（週が変わった直後に呼ぶ） */
 function noteReminders(t) {
   const ut = G.user.tid;
-  if (t === 27) notify('league', '今週が7月最終週です。トレードと新しい選手の登録はこの週まで', { go: 'trade' });
-  if (t === 33) { const mk = G.prospects.filter(p => p.pr && p.pr.mark).length; notify('draft', `ドラフト会議まであと6週です。指名候補（★）は${mk}人`, { go: 'scout' }); }
+  if (t === 27) notify('league', LG.mlb ? '今週が7月最終週です。トレードの期限はこの週まで' : '今週が7月最終週です。トレードと新しい選手の登録はこの週まで', { go: 'trade' });
+  if (LG.mlb && t === 20) { const mk = G.prospects.filter(p => p.pr && p.pr.mark).length; notify('draft', `ドラフトまであと6週です。指名候補（★）は${mk}人`, { go: 'scout' }); }
+  if (!LG.mlb && t === 33) { const mk = G.prospects.filter(p => p.pr && p.pr.mark).length; notify('draft', `ドラフト会議まであと6週です。指名候補（★）は${mk}人`, { go: 'scout' }); }
+  if (LG.mlb && t === 30) { const list = roster(ut).filter(p => faEligibleSoon(p) && p.yrs <= 1 && !(p.ren && p.ren.st === 'signed') && ovr(p) >= 55).sort((a, b) => ovr(b) - ovr(a)); if (list.length) notify('fa', `今オフFAになる見込みの選手：${list.slice(0, 6).map(p => p.name).join('、')}${list.length > 6 ? 'ほか' : ''}。選手の詳細から「契約延長を打診」すれば引き留められます`, { go: 'fa', note: 'hi' }); }
   if (t === 46) { const n = renewalList().length; if (n) notify('contract', `契約更改の締切は来週（12月第4週）です。まだ${n}人と合意していません`, { go: 'contracts', note: 'hi' }); }
-  if (t === 40) { const mine = G.faMarket.filter(f => f.from === ut).length; notify('fa', `FA市場が開きました。${G.faMarket.length}人が権利を行使${mine ? `（うち自球団から${mine}人）` : ''}`, { go: 'fa', note: mine ? 'hi' : true }); }
+  if (t === 40) { const mine = G.faMarket.filter(f => f.from === ut).length; notify('fa', `FA市場が開きました。${G.faMarket.length}人が${LG.mlb ? 'FAに' : '権利を行使'}${mine ? `（うち自球団から${mine}人）` : ''}`, { go: 'fa', note: mine ? 'hi' : true }); }
 }

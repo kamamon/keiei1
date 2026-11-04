@@ -193,12 +193,14 @@ function weeklyInjuries() {
 }
 
 /* ---------- キャンプ（2月）・秋季キャンプ・ウィンターリーグ ---------- */
+function defaultCampSite() { return LG.mlb ? 'arizona' : 'miyazaki'; }
 function startCamp() {
-  if (!G.camp) G.camp = { site: 'miyazaki', theme: 'balance', int: 'normal', guest: false };
+  if (!G.camp) G.camp = { site: defaultCampSite(), theme: 'balance', int: 'normal', guest: false };
+  if (!CAMP_SITES[G.camp.site]) G.camp.site = defaultCampSite();
   const site = CAMP_SITES[G.camp.site];
   book('exp', 'camp', site.cost + (G.camp.guest ? 2000 : 0));
   uT().pop = clamp(uT().pop + site.pop, 0, 99);
-  if (site.frn) for (const p of roster(G.user.tid)) if (p.frn && p.adapt < 0) p.adapt = Math.min(0, p.adapt + 2);
+  if (site.frn) for (const p of roster(G.user.tid)) if ((p.frn || (LG.mlb && p.nat && p.nat !== 'US')) && p.adapt < 0) p.adapt = Math.min(0, p.adapt + 2);
   G.camp.started = true;
   addNews('camp', `春季キャンプ開始（${site.n}・${CAMP_THEMES[G.camp.theme].n}・${CAMP_INT[G.camp.int].n}）`, { tid: G.user.tid });
 }
