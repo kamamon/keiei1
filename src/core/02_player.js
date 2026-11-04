@@ -1,6 +1,6 @@
 /* =========================================================
    選手：生成・能力・評価・年俸
-   能力は1〜100（60が1軍平均）。球速のみkm/h
+   能力は1〜100（60が1軍平均）。球速のみkm/h（メジャー版は LG.velAdd だけ速い水準）
    ========================================================= */
 const BAT_KEYS = ['con', 'pow', 'eye', 'spd', 'arm', 'fld'];
 const PIT_KEYS = ['vel', 'ctl', 'brk', 'sta'];
@@ -18,7 +18,9 @@ const ARCH = {
 };
 
 function isP(p) { return p.pos === 'P'; }
-function velScore(v) { return clamp((v - 122) * 2.5, 0, 100); }
+/* 球速の水準のずれ（日本版0・メジャー版+5キロ）。評価はリーグの水準に合わせる */
+function velOff() { return LG.velAdd || 0; }
+function velScore(v) { return clamp((v - 122 - (LG.velAdd || 0)) * 2.5, 0, 100); }
 function batOvr(a, pos) {
   const off = a.con * .40 + a.pow * .36 + a.eye * .12 + a.spd * .12;
   const def = a.fld * .65 + a.arm * .35;
@@ -108,12 +110,12 @@ function genAttrs(p, cur, pot) {
   pot = Math.max(pot, cur);
   const g = pot - cur;
   if (isP(p)) {
-    const rp = p.pt === 'RP';
-    const a = { vel: clamp(145 + (cur - 60) * 0.30 + rn(0, 3.2) + (rp ? 2 : 0), 126, 162), ctl: cur + rn(0, 9), brk: cur + rn(0, 9), sta: rp ? cur - 16 + rn(0, 8) : cur + 8 + rn(0, 8) };
+    const rp = p.pt === 'RP', V = velOff();
+    const a = { vel: clamp(145 + V + (cur - 60) * 0.30 + rn(0, 3.2) + (rp ? 2 : 0), 126 + V, 162 + V), ctl: cur + rn(0, 9), brk: cur + rn(0, 9), sta: rp ? cur - 16 + rn(0, 8) : cur + 8 + rn(0, 8) };
     for (let i = 0; i < 4; i++) { const d = cur - pitOvr(a, p.pt); a.ctl += d * 0.8; a.brk += d * 0.8; a.sta += d * 0.5; }
     for (const k of ['ctl', 'brk', 'sta']) a[k] = clamp(a[k], 5, 99);
     const c = {
-      vel: clamp(a.vel + g * 0.24 + Math.abs(rn(0, 1.5)), a.vel, 165),
+      vel: clamp(a.vel + g * 0.24 + Math.abs(rn(0, 1.5)), a.vel, 165 + V),
       ctl: clamp(a.ctl + g + rn(0, 4), a.ctl, 99), brk: clamp(a.brk + g + rn(0, 4), a.brk, 99), sta: clamp(a.sta + g * 0.9 + rn(0, 4), a.sta, 99)
     };
     p.a = a; p.cap = c;
@@ -171,4 +173,13 @@ function formArrow(f) { return ['↓', '↘', '→', '↗', '↑'][f + 2]; }
 function formName(f) { return ['絶不調', '不調', '普通', '好調', '絶好調'][f + 2]; }
 function handStr(p) { return (p.thr === 'L' ? '左' : '右') + '投' + (p.bats === 'L' ? '左' : p.bats === 'S' ? '両' : '右') + '打'; }
 function displayName(p) { return p.name; }
+function velMph(v) { return Math.round(v / 1.609344); }
 function velStr(v) { return Math.round(v) + 'km/h'; }
+/* 画面用：メジャー版はマイルも添える（two：2行にする） */
+function velHtml(v, two) {
+  const s = Math.round(v) + 'km/h';
+  if (!LG.mlb) return s;
+  return two ? `${s}<span class="small faint vmph">${velMph(v)}mph</span>` : `${s} <span class="small faint">${velMph(v)}mph</span>`;
+}
+/* ニュース用：メジャー版は「100マイル（161キロ）」 */
+function velNews(v) { const k = Math.round(v); return LG.mlb ? `${velMph(k)}マイル（${k}キロ）` : `${k}キロ`; }

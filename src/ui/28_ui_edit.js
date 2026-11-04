@@ -102,7 +102,7 @@ MODALS.pedit = ({ id }) => {
     ${d.wasP !== P && d.hasStats ? '<p class="small warn" style="margin:8px 0 0">投手と野手を入れ替えると、これまでの成績の記録は消えます。</p>' : ''}`;
   const attrs = `<table class="t compact ed-attr"><thead><tr><th>能力</th><th class="num">いま</th><th></th><th class="num">上限</th></tr></thead><tbody>${keys.map(k => {
     const [lo, hi] = attrRange(k);
-    return `<tr><td>${ATTR_JP[k]}</td><td class="num"><input class="inp num" type="number" min="${lo}" max="${hi}" value="${Math.round(d.a[k])}" data-i="peAttr" data-w="a" data-k="${k}" aria-label="${ATTR_JP[k]}（いま）"></td><td>${k === 'vel' ? '<span class="small muted">km/h</span>' : `<span data-gr="${k}">${gr(d.a[k])}</span>`}</td><td class="num"><input class="inp num" type="number" min="${lo}" max="${k === 'vel' ? 172 : 99}" value="${Math.round(Math.max(d.cap[k], d.a[k]))}" data-i="peAttr" data-w="cap" data-k="${k}" aria-label="${ATTR_JP[k]}（上限）"></td></tr>`;
+    return `<tr><td>${ATTR_JP[k]}</td><td class="num"><input class="inp num" type="number" min="${lo}" max="${hi}" value="${Math.round(d.a[k])}" data-i="peAttr" data-w="a" data-k="${k}" aria-label="${ATTR_JP[k]}（いま）"></td><td>${k === 'vel' ? '<span class="small muted">km/h</span>' : `<span data-gr="${k}">${gr(d.a[k])}</span>`}</td><td class="num"><input class="inp num" type="number" min="${lo}" max="${k === 'vel' ? velCapMax() : 99}" value="${Math.round(Math.max(d.cap[k], d.a[k]))}" data-i="peAttr" data-w="cap" data-k="${k}" aria-label="${ATTR_JP[k]}（上限）"></td></tr>`;
   }).join('')}</tbody></table>
     <div class="row" style="margin-top:8px"><button class="btn xs" data-a="peAll" data-v="-5">全体 −5</button><button class="btn xs" data-a="peAll" data-v="5">全体 +5</button><button class="btn xs" data-a="peCap" data-v="0">上限をいまに合わせる</button><button class="btn xs" data-a="peCap" data-v="10">上限を+10</button></div>`;
   const subs = P ? '<p class="small muted" style="margin:0">投手にはサブポジションはありません。</p>' : `<div class="ed-grid">${SUB_KEYS.filter(k => k !== d.pos).map(k => edFld(POS_JP[k], `<select class="inp" data-c="peSub" data-k="${k}">${[0, 1, 2, 3].map(v => opt(v, v ? SUB_MARK[v] + ' ' + SUB_LVN[v] : '守れない', d.sub[k] || 0)).join('')}</select>`)).join('')}</div>`;
@@ -137,7 +137,7 @@ function peLive() {
 }
 ACT.peTxt = el => { UI.f.pe[el.dataset.k] = el.value; };
 ACT.peNum = el => { UI.f.pe[el.dataset.k] = el.dataset.k === 'sal' ? moneyFrom(+el.value) : +el.value; };
-ACT.peAttr = el => { const d = UI.f.pe; const [lo, hi] = attrRange(el.dataset.k); d[el.dataset.w][el.dataset.k] = clamp(+el.value || lo, lo, el.dataset.w === 'cap' && el.dataset.k === 'vel' ? 172 : hi); peLive(); };
+ACT.peAttr = el => { const d = UI.f.pe; const [lo, hi] = attrRange(el.dataset.k); d[el.dataset.w][el.dataset.k] = clamp(+el.value || lo, lo, el.dataset.w === 'cap' && el.dataset.k === 'vel' ? velCapMax() : hi); peLive(); };
 ACT.peRange = el => { UI.f.pe.inj = +el.value; const s = $('#peInj'); if (s) s.textContent = injLabel(+el.value); };
 ACT.peSel = el => {
   const d = UI.f.pe; const k = el.dataset.k;
@@ -176,7 +176,7 @@ ACT.peAll = el => {
 };
 ACT.peCap = el => {
   const d = UI.f.pe; const v = +el.dataset.v;
-  for (const k of editKeys(d)) d.cap[k] = v ? clamp(Math.max(d.cap[k], d.a[k]) + (k === 'vel' ? v * 0.4 : v), d.a[k], k === 'vel' ? 172 : 99) : d.a[k];
+  for (const k of editKeys(d)) d.cap[k] = v ? clamp(Math.max(d.cap[k], d.a[k]) + (k === 'vel' ? v * 0.4 : v), d.a[k], k === 'vel' ? velCapMax() : 99) : d.a[k];
   renderModalRoot();
 };
 ACT.peCancel = el => { const id = +el.dataset.id; UI.f.pe = null; replaceModal('player', { id }); render(); };

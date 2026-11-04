@@ -48,7 +48,7 @@ ACT.scf = el => { const f = UI.f.scf; f[el.dataset.k] = el.type === 'checkbox' ?
 ACT.scMark = el => { const p = G.prospects.find(x => x.id === +el.dataset.id); if (p) p.pr.mark = !p.pr.mark; render(); };
 function prospectModal(p) {
   const keys = isP(p) ? PIT_KEYS : BAT_KEYS; const sc = p.pr.sc; const sig = scoutSigma(p);
-  const attr = keys.map(k => { const v = shownAttr(p, k); const rg = k === 'vel' ? Math.round(sig * 0.3) : Math.round(sig); return `<div class="row sp"><span class="small">${ATTR_JP[k]}</span><span>${k === 'vel' ? v + 'km/h' : av(v)} <span class="small faint">±${rg}</span></span></div>`; }).join('');
+  const attr = keys.map(k => { const v = shownAttr(p, k); const rg = k === 'vel' ? Math.round(sig * 0.3) : Math.round(sig); return `<div class="row sp"><span class="small">${ATTR_JP[k]}</span><span>${k === 'vel' ? velHtml(v) : av(v)} <span class="small faint">±${rg}</span></span></div>`; }).join('');
   return { title: `${esc(p.name)} <span class="small muted">${esc(p.pr.school)}</span> ${genTag(p)}`, size: 'narrow',
     body: `${p.pr.gen ? `<p class="gen-note">「${esc(p.pr.nick || '怪物')}」と呼ばれる、10年に一度の逸材です。${LG.mlb ? '全体1位指名の最有力候補です。' : '1位指名は複数球団の競合が確実です。'}</p>` : ''}<div class="row"><span class="tag">${p.pr.cat}</span><span class="tag">${isP(p) ? '投手' : POS_JP[p.pos]}</span><span class="small muted">${p.age}歳　${handStr(p)}　${esc(REGIONS[p.home])}</span></div>
       <dl class="kv" style="margin-top:10px"><dt>注目度</dt><dd>${p.pr.hype}</dd><dt>調査度</dt><dd>${Math.round(sc)}%</dd><dt>推定総合</dt><dd>${av(shownOvr(p))}</dd><dt>推定伸びしろ</dt><dd>${shownPot(p) != null ? gr(shownPot(p)) : '<span class="faint">調査25%以上で判明</span>'}</dd>

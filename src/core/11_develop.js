@@ -82,7 +82,7 @@ function growPlayer(p, ctx) {
       const yrs = age - g.p;
       let dec = (PHYS[k] ? 0.035 : 0.02) * Math.pow(yrs, 0.8) * rf(0.5, 1.5) * (ctx.season === 2 ? 0.5 : 1);
       if (k === 'vel') dec *= 0.35;
-      p.a[k] = Math.max(k === 'vel' ? 118 : 5, p.a[k] - dec);
+      p.a[k] = Math.max(k === 'vel' ? 118 + velOff() : 5, p.a[k] - dec);
       gain -= k === 'vel' ? dec * 2.5 : dec;
     }
   }
@@ -112,7 +112,7 @@ function gradeUpNotes() {
 }
 function breakout(p) {
   const keys = shuffle((isP(p) ? PIT_KEYS : BAT_KEYS).slice()).slice(0, 3);
-  for (const k of keys) { const inc = k === 'vel' ? rf(1.5, 3.5) : rf(3, 6); p.cap[k] = Math.min(k === 'vel' ? 166 : 99, p.cap[k] + inc * 0.35); p.a[k] = Math.min(p.cap[k], p.a[k] + inc); }
+  for (const k of keys) { const inc = k === 'vel' ? rf(1.5, 3.5) : rf(3, 6); p.cap[k] = Math.min(k === 'vel' ? 166 + velOff() : 99, p.cap[k] + inc * 0.35); p.a[k] = Math.min(p.cap[k], p.a[k] + inc); }
   p.mor = clamp(p.mor + 10, 0, 100);
   if (isUser(p.team)) addNews('dev', `${p.name}が覚醒！ ${keys.map(k => ATTR_JP[k]).join('・')}が大きく伸びました`, { important: true, tid: p.team, note: 'hi', pid: p.id });
 }
@@ -167,7 +167,7 @@ function injure(p, mult) {
   const inj = wpick(pool, x => x.p * (x.w[1] >= 12 ? mult : 1));
   const w = ri(inj.w[0], inj.w[1]);
   p.injW = w; p.injN = inj.n; p.form = Math.min(p.form, 0);
-  if (inj.perm) { if (isP(p)) { p.a.vel = Math.max(120, p.a.vel - rf(1, 3)); p.cap.vel = Math.max(p.a.vel, p.cap.vel - 2); } else p.a.spd -= 3; }
+  if (inj.perm) { if (isP(p)) { p.a.vel = Math.max(120 + velOff(), p.a.vel - rf(1, 3)); p.cap.vel = Math.max(p.a.vel, p.cap.vel - 2); } else p.a.spd -= 3; }
   if (p.team >= 0) {
     if (isUser(p.team) && p.lv === 1) addNews('injury', `${p.name}が${inj.n}で離脱（全治${w}週間）`, { important: w >= 4, tid: p.team, note: w >= 4 ? 'hi' : true, pid: p.id });
     if (p.lv === 1) { if (isUser(p.team) && !G.user.autoSwap) { /* ユーザーに任せる */ } else swapInjured(p.team); }

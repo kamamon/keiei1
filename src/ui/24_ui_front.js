@@ -272,7 +272,7 @@ function foreignModal(p) {
   const keys = isP(p) ? PIT_KEYS : BAT_KEYS; const s = 2 + 10 * (1 - p.pr.sc / 100);
   return { title: `${esc(p.name)} <span class="small muted">${POS_JP[p.pos]}・${p.age}歳</span>`, size: 'narrow',
     body: `<dl class="kv"><dt>前所属</dt><dd>${esc(p.pr.school)}</dd><dt>推定総合</dt><dd>${av(shownFrnOvr(p))}</dd><dt>適応力</dt><dd>${adaptLabel(p)}</dd><dt>調査度</dt><dd>${Math.round(p.pr.sc)}%</dd><dt>条件</dt><dd>${fmtSal(p.fa.ask)}×${p.fa.yrs}年／${LG.mlb ? '譲渡金' : '移籍金'}${p.fa.fee ? fmtOku(p.fa.fee) : 'なし'}</dd><dt>性格</dt><dd>${p.pr.sc >= 50 ? esc(PERS[p.per].n) : '不明'}</dd></dl>
-      <hr class="sep">${keys.map(k => `<div class="row sp"><span class="small">${ATTR_JP[k]}</span><span>${k === 'vel' ? Math.round(p.a.vel + (p.pr.noise.ovr * s * 0.3)) + 'km/h' : av(clamp(Math.round(p.a[k] + p.pr.noise.ovr * s), 1, 99))}</span></div>`).join('')}
+      <hr class="sep">${keys.map(k => `<div class="row sp"><span class="small">${ATTR_JP[k]}</span><span>${k === 'vel' ? velHtml(p.a.vel + (p.pr.noise.ovr * s * 0.3)) : av(clamp(Math.round(p.a[k] + p.pr.noise.ovr * s), 1, 99))}</span></div>`).join('')}
       <hr class="sep">${!isP(p) ? `<div class="row small" style="margin-bottom:6px">守れる位置：${POS_JP[p.pos]} ${subTags(p, { empty: '<span class="faint">ほかになし</span>' })}</div>` : ''}<div class="small muted" style="margin-bottom:4px">特殊能力</div>${p.pr.sc >= 50 ? skChips(p) : '<span class="faint small">調査50%以上で判明</span>'}`,
     foot: `<button class="btn" data-a="closeModal">閉じる</button><button class="btn" data-a="peOpen" data-id="${p.id}">編集</button><button class="btn pri" data-a="signFrn" data-id="${p.id}">獲得する</button>` };
 }

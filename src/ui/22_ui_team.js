@@ -105,7 +105,7 @@ MODALS.player = ({ id }) => {
   const showCap = mine;
   const attrs = keys.map(k => {
     const v = p.a[k], c = p.cap[k];
-    if (k === 'vel') return `<div class="row" style="gap:10px"><span style="width:64px" class="small">${ATTR_JP[k]}</span><div style="flex:1">${bar(velScore(v), 100, '', showCap ? velScore(c) : null)}</div><span class="num" style="width:74px;text-align:right">${Math.round(v)}km/h</span></div>`;
+    if (k === 'vel') return `<div class="row" style="gap:10px"><span style="width:64px" class="small">${ATTR_JP[k]}</span><div style="flex:1">${bar(velScore(v), 100, '', showCap ? velScore(c) : null)}</div><span class="num" style="width:74px;text-align:right">${velHtml(v, true)}</span></div>`;
     return `<div class="row" style="gap:10px"><span style="width:64px" class="small">${ATTR_JP[k]}</span><div style="flex:1">${bar(v, 100, '', showCap ? c : null)}</div><span style="width:74px;text-align:right">${av(v)}</span></div>`;
   }).join('');
   const T = p.team >= 0 ? G.teams[p.team] : null;

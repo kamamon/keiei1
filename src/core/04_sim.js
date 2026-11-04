@@ -1,7 +1,10 @@
 /* =========================================================
    試合エンジン（1打席ずつのシミュレーション）
    ========================================================= */
-const LGC = { bb: .077, hbp: .008, k: .188, hr: .0195, babip: .290, err: .012, dbl: .20, tri: .020 };
+const LGC_BASE = { bb: .077, hbp: .008, k: .188, hr: .0195, hrB: 1.35, babip: .290, err: .012, dbl: .20, tri: .020, era0: 3.7 };
+const LGC = Object.assign({}, LGC_BASE);
+/* リーグごとの得点環境（メジャー版は LG.sim で三振・本塁打を多くする）。setLeague から呼ぶ */
+function setSimEnv() { Object.assign(LGC, LGC_BASE, LG.sim || {}); }
 function nz(v) { return (v - 60) / 40; }
 const DEF_FX = { vsL: 0, vsLB: 0, bk: 1, bhr: 1, bab: 0, pk: 1, pbb: 1, phr: 1, pbab: 0, go: 0, nobi: 0, inf: false };
 const DEF_C = { con: 63, pow: 63, eye: 63, spd: 63, arm: 63, fld: 63, def: 63, stuff: 63, ctl: 63 };
@@ -20,7 +23,7 @@ function computeSimCenter() {
   C.def = nt ? acc.def / nt : 63; C.stuff = np ? acc.stuff / np : 63; C.ctl = np ? acc.ctl / np : 63;
   G.simC = C;
 }
-function pitMax(p, isSP) { const iron = skFx(p).iron; return isSP ? 68 + p.a.sta * 0.56 + (iron ? 10 : 0) : 16 + p.a.sta * 0.36 + (iron ? 6 : 0); }
+function pitMax(p, isSP) { const iron = skFx(p).iron; const sp = LG.spPit || [68, 0.56]; return isSP ? sp[0] + p.a.sta * sp[1] + (iron ? 10 : 0) : 16 + p.a.sta * 0.36 + (iron ? 6 : 0); }
 function parkHR(hid) { return isUser(hid) ? G.stad.hrF : G.teams[hid].stad.hrF; }
 function pcFor(r) {
   switch (r) { case 'K': return 4 + ri(0, 3); case 'BB': return 5 + ri(0, 2); case 'HBP': return 1 + ri(0, 3); default: return 1 + ri(0, 5); }
@@ -69,7 +72,7 @@ function simPA(b, pe, defN, park) {
   const pBB = LGC.bb * Math.exp(0.45 * eye - 0.55 * ctl) * pf.pbb;
   const pHBP = LGC.hbp * Math.exp(-0.25 * ctl);
   const pK = LGC.k * Math.exp(-0.55 * con + 0.55 * stuff - 0.15 * eye) * bf.bk * pf.pk * (1 + pf.nobi * 0.02);
-  const pHR = LGC.hr * Math.exp(1.35 * pow - 0.45 * stuff - 0.1 * ctl - 0.05 * pf.nobi) * park * bf.bhr * pf.phr;
+  const pHR = LGC.hr * Math.exp(LGC.hrB * pow - 0.45 * stuff - 0.1 * ctl - 0.05 * pf.nobi) * park * bf.bhr * pf.phr;
   let r = rnd();
   if ((r -= pBB) < 0) return 'BB';
   if ((r -= pHBP) < 0) return 'HBP';

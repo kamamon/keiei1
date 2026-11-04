@@ -2,8 +2,9 @@
    選手の編集（エディット）と、新しい選手の作成
    画面では写し（下書き）を編集し、保存したときに選手へ反映する
    ========================================================= */
-const ATTR_RANGE = { vel: [110, 170] };
-function attrRange(k) { return ATTR_RANGE[k] || [1, 99]; }
+/* 球速はkm/h（メジャー版は水準が速いぶん範囲も上にずれる） */
+function attrRange(k) { return k === 'vel' ? [110 + velOff(), 170 + velOff()] : [1, 99]; }
+function velCapMax() { return 172 + velOff(); }
 function editDraft(p) {
   return {
     id: p.id, name: p.name, num: p.num, age: p.age, thr: p.thr, bats: p.bats, pos: p.pos, pt: p.pt || 'SP',
@@ -46,7 +47,7 @@ function applyEdit(p, d) {
   for (const k of isP(p) ? PIT_KEYS : BAT_KEYS) {
     const [lo, hi] = attrRange(k);
     a[k] = clamp(+d.a[k] || lo, lo, hi);
-    c[k] = clamp(Math.max(+d.cap[k] || 0, a[k]), lo, k === 'vel' ? 172 : 99);
+    c[k] = clamp(Math.max(+d.cap[k] || 0, a[k]), lo, k === 'vel' ? velCapMax() : 99);
   }
   p.a = a; p.cap = c;
   const sx0 = p.sx || {};
