@@ -3,12 +3,12 @@
    ========================================================= */
 SCREENS.records = () => {
   const tab = getTab('records', 'mine');
-  const tb = tabs('records', [['mine', '球団の歩み'], ['recs', '記録'], ['feats', '偉業'], ['hof', '野球殿堂'], ['retnum', '永久欠番'], ['league', '歴代の優勝'], ['legends', '名選手'], ['mlb', 'メジャー移籍']], tab);
+  const tb = tabs('records', [['mine', '球団の歩み'], ['recs', '記録'], ['feats', '偉業'], ['hof', '野球殿堂'], ['retnum', '永久欠番'], ['league', '歴代の優勝'], ['legends', '名選手']].concat(LG.mlb ? [] : [['mlb', 'メジャー移籍']]), tab);
   let body = '';
   if (tab === 'mine') {
     const H = G.hist.user; const F = G.fin.hist;
-    body = H.length ? panel('', `<div class="tw"><table class="t"><thead><tr><th>年</th><th>順位</th><th>勝敗</th><th>ポストシーズン</th><th class="num">観客動員</th><th class="num">収支</th><th class="num">オーナー信頼</th></tr></thead><tbody>${H.slice().reverse().map(h => `<tr><td>${h.y}</td><td>${h.rank}位</td><td>${h.w}勝${h.l}敗${h.d ? h.d + '分' : ''}</td><td>${h.champ ? '<span class="tag lamp">日本一</span>' : h.lg ? '<span class="tag b">リーグ優勝</span>' : ''}</td><td class="num">${fmtPeople(h.att)}</td><td class="num ${h.net < 0 ? 'neg' : 'pos'}">${fmtSigned(h.net)}</td><td class="num">${Math.round(h.trust)}</td></tr>`).join('')}</tbody></table></div>`, { flush: true }) +
-      (F.length > 1 ? '<div style="height:16px"></div>' + panel('観客動員と収支の推移', lineChart([{ n: '観客動員（万人）', c: 'var(--team)', v: F.map(h => h.att / 10000) }, { n: '収支（億円）', c: 'var(--lamp)', v: F.map(h => h.net / 10000) }], F.map(h => String(h.y)), { fmt: v => trimNum(v.toFixed(1)), label: '推移' })) : '')
+    body = H.length ? panel('', `<div class="tw"><table class="t"><thead><tr><th>年</th><th>順位</th><th>勝敗</th><th>ポストシーズン</th><th class="num">観客動員</th><th class="num">収支</th><th class="num">オーナー信頼</th></tr></thead><tbody>${H.slice().reverse().map(h => `<tr><td>${h.y}</td><td>${rankStr(h.rank)}</td><td>${h.w}勝${h.l}敗${h.d ? h.d + '分' : ''}</td><td>${h.champ ? `<span class="tag lamp">${LG.champ}</span>` : h.lg ? '<span class="tag b">リーグ優勝</span>' : h.po ? `<span class="tag">${POST_JP[h.po] || 'ポストシーズン'}</span>` : ''}</td><td class="num">${fmtPeople(h.att)}</td><td class="num ${h.net < 0 ? 'neg' : 'pos'}">${fmtSigned(h.net)}</td><td class="num">${Math.round(h.trust)}</td></tr>`).join('')}</tbody></table></div>`, { flush: true }) +
+      (F.length > 1 ? '<div style="height:16px"></div>' + panel('観客動員と収支の推移', lineChart([{ n: '観客動員（万人）', c: 'var(--team)', v: F.map(h => h.att / 10000) }, { n: `収支（${bigUnit()}）`, c: 'var(--lamp)', v: F.map(h => bigMoney(h.net)) }], F.map(h => String(h.y)), { fmt: v => trimNum(v.toFixed(1)), label: '推移' })) : '')
       : '<div class="empty">1年目のシーズンが終わると、ここに球団の歩みが記録されます。</div>';
   } else if (tab === 'recs') body = recordsTab();
   else if (tab === 'feats') body = featsTab();
@@ -16,9 +16,9 @@ SCREENS.records = () => {
   else if (tab === 'retnum') body = retnumTab();
   else if (tab === 'league') {
     const S = G.hist.seasons.slice().reverse();
-    const titles = G.teams.slice().sort((a, b) => (b.titles.gs * 10 + b.titles.lg) - (a.titles.gs * 10 + a.titles.lg));
-    body = `<div class="grid g2">${panel('歴代の優勝', S.length ? `<table class="t compact"><thead><tr><th>年</th><th>${LEAGUES[0]}</th><th>${LEAGUES[1]}</th><th>日本一</th></tr></thead><tbody>${S.map(s => `<tr><td>${s.y}</td><td>${s.lgChamp ? tMark(s.lgChamp[0]) : '―'}</td><td>${s.lgChamp ? tMark(s.lgChamp[1]) : '―'}</td><td>${s.champ != null ? tMark(s.champ) : '―'}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">まだ記録がありません</div>', { flush: true })}
-      ${panel('優勝回数（就任後）', `<table class="t compact"><thead><tr><th>球団</th><th class="num">リーグ優勝</th><th class="num">日本一</th></tr></thead><tbody>${titles.map(t => `<tr class="${isUser(t.id) ? 'me' : ''}"><td>${tMark(t.id)}</td><td class="num">${t.titles.lg}</td><td class="num">${t.titles.gs}</td></tr>`).join('')}</tbody></table>`, { flush: true })}</div>`;
+    const titles = G.teams.slice().sort((a, b) => (b.titles.gs * 100 + b.titles.lg * 10 + (b.titles.div || 0)) - (a.titles.gs * 100 + a.titles.lg * 10 + (a.titles.div || 0)));
+    body = `<div class="grid g2">${panel('歴代の優勝', S.length ? `<table class="t compact"><thead><tr><th>年</th><th>${LEAGUES[0]}</th><th>${LEAGUES[1]}</th><th>${LG.champ}</th></tr></thead><tbody>${S.map(s => `<tr><td>${s.y}</td><td>${s.lgChamp ? tMark(s.lgChamp[0]) : '―'}</td><td>${s.lgChamp ? tMark(s.lgChamp[1]) : '―'}</td><td>${s.champ != null ? tMark(s.champ) : '―'}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">まだ記録がありません</div>', { flush: true })}
+      ${panel('優勝回数（就任後）', `<table class="t compact"><thead><tr><th>球団</th>${LG.mlb ? '<th class="num">地区優勝</th>' : ''}<th class="num">リーグ優勝</th><th class="num">${LG.champ}</th></tr></thead><tbody>${titles.map(t => `<tr class="${isUser(t.id) ? 'me' : ''}"><td>${tMark(t.id)}</td>${LG.mlb ? `<td class="num">${t.titles.div || 0}</td>` : ''}<td class="num">${t.titles.lg}</td><td class="num">${t.titles.gs}</td></tr>`).join('')}</tbody></table>`, { flush: true })}</div>`;
   } else if (tab === 'legends') {
     const L = G.legends.slice().reverse();
     body = L.length ? panel('', table('leg', [
@@ -136,7 +136,7 @@ ACT.sysTheme = el => { G.user.theme = el.dataset.v; try { localStorage.setItem('
 ACT.toTitleAsk = () => { openModal('toTitle'); render(); };
 MODALS.toTitle = () => ({ title: 'タイトルに戻りますか', size: 'narrow', body: '<p>オートセーブ済みのデータは「続きから」で再開できます。</p>', foot: '<button class="btn" data-a="closeModal">やめる</button><button class="btn pri" data-a="toTitle">タイトルへ</button>' });
 ACT.help = () => { openModal('help'); render(); };
-MODALS.help = () => ({
+MODALS.help = () => LG.mlb ? helpMLB() : ({
   title: '遊び方', size: 'wide', body: `<div class="grid g2"><div>
     <h4>1年の流れ</h4><table class="t compact"><tbody>
     <tr><td>1月</td><td>予算・中期計画・キャンプ地を決める。FC会員が更新。</td></tr><tr><td>2月</td><td>春季キャンプ（成長が約2倍）。</td></tr>
@@ -163,3 +163,30 @@ MODALS.help = () => ({
     <li>「選手の編集」では、名前・背番号・能力・特殊能力・サブポジションなどを自由に変えたり、新しい選手を作ったりできます。</li></ul>
   </div></div>`, foot: '<button class="btn pri" data-a="closeModal">閉じる</button>'
 });
+
+const POST_JP = { pen: 'リーグ優勝', lcs: 'リーグ優勝決定シリーズ', ds: '地区シリーズ', wc: 'ワイルドカード', champ: 'ワールドチャンピオン' };
+
+/* メジャー版の遊び方 */
+function helpMLB() {
+  return { title: '遊び方（メジャーリーグ）', size: 'wide', body: `<div class="grid g2"><div>
+    <h4>1年の流れ</h4><table class="t compact twrap"><tbody>
+    <tr><td>1月</td><td>予算・中期計画・キャンプ地を決める。会員が更新。殿堂の投票。</td></tr><tr><td>2月</td><td>スプリングトレーニング（成長が約2倍）。</td></tr>
+    <tr><td>3月</td><td>オープン戦。第4週に開幕。</td></tr><tr><td>4〜9月</td><td>レギュラーシーズン162試合（毎週6〜7試合）。7月第3週にオールスターとドラフト。7月末がトレード期限。</td></tr>
+    <tr><td>10月</td><td>ポストシーズン：ワイルドカードシリーズ（3試合）→地区シリーズ（5試合）→リーグ優勝決定シリーズ（7試合）→ワールドシリーズ（7試合）。</td></tr>
+    <tr><td>11月</td><td>引退・FA・表彰。保有6年を過ぎて契約が切れた選手は、みなFAになります。</td></tr>
+    <tr><td>12月</td><td>年俸調停・海外選手の獲得・ドラフト抽選会。年末にぜいたく税とオーナー評価。</td></tr></tbody></table>
+    <h4>リーグのしくみ</h4><ul class="small"><li>30球団が2リーグ・6地区に分かれます。各リーグの地区1位3球団と、それ以外で勝率の高い3球団（ワイルドカード）がポストシーズンへ。上位2シードは初戦が免除されます。</li>
+    <li>延長戦は10回から無死二塁で始まり、引き分けはありません。先発は5人のローテーションです。</li>
+    <li>試合に出るのは26人（メジャー登録・投手は13人まで）。40人枠の残りはマイナーで待機し、40人枠の外にマイナー契約の選手がいます。</li></ul>
+  </div><div>
+    <h4>契約とお金</h4><ul class="small"><li>メジャーに登録された期間（サービスタイム）で契約の段階が変わります。0〜2年は最低年俸に近い額で自動更新、3〜5年は年俸調停、6年を過ぎて契約が切れるとFAです。</li>
+    <li>年俸調停では、選手と球団がそれぞれ額を出します。12月第4週までに合意できなければ、公聴会でどちらか一方の額に決まります。</li>
+    <li>年俸総額がぜいたく税の基準（${fmtOku(LG.lux.th)}）を超えると、超えた分に税がかかります。何年も続けて超えると税率が上がります。</li>
+    <li>主力を手放したくなければ、FAになる前に選手の詳細から「契約延長を打診」しましょう。</li>
+    <li>放映権の収入が大きく、大都市の球団ほど観客・スポンサーも集まります。黒字はオーナーの評価になりますが、勝てなければ人気が落ちます。</li></ul>
+    <h4>ドラフトと海外選手</h4><ul class="small"><li>ドラフトは7月。指名順は前の年の成績の逆順で、ポストシーズンに出なかった球団の上位6つは12月の抽選で決まります。指名した選手は契約金を払ってすぐマイナー契約で入団します。</li>
+    <li>日本・韓国のプロ選手はポスティングで獲得でき、元の球団に譲渡金を払います。キューバや中南米の選手もいます。調査を重ねてから獲得しましょう。</li>
+    <li>数年に一度、「10年に一度の逸材」がドラフト候補に現れます。</li></ul>
+    <h4>記録と殿堂</h4><ul class="small"><li>記録・偉業・大台（3000安打・500本塁打・300勝など）には演出と記念イベントがあります。名選手は引退から5年後に野球殿堂の候補になり、75%以上の票で殿堂入りします（候補は10年まで）。</li></ul>
+  </div></div>`, foot: '<button class="btn pri" data-a="closeModal">閉じる</button>' };
+}

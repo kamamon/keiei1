@@ -58,7 +58,7 @@ function startMLB(p, how) {
 }
 /* 毎週：交渉の結果を出す（12月第4週までにすべて決まる） */
 function weeklyMLB() {
-  if (!G.mlbTry || !G.mlbTry.length) return;
+  if (LG.mlb || !G.mlbTry || !G.mlbTry.length) return;
   const t = curTurn();
   for (const x of G.mlbTry.slice()) {
     const p = P_(x.pid);
@@ -106,6 +106,7 @@ function mlbLine(p) {
 /* 11月第1週：メジャーのシーズンを終えた選手の去就。日本に戻る選手を返す */
 function mlbSeasonEnd() {
   const back = [];
+  if (LG.mlb) return back;
   for (const m of (G.mlbAway || []).slice()) {
     if (m.y >= G.year) continue;
     const p = m.p;

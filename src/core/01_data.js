@@ -257,7 +257,7 @@ const REV_CATS = { ticket: '入場料', food: '飲食', goods: 'グッズ', tv: 
   fanclub: 'ファンクラブ', stadad: '球場内広告', town: '街・不動産', farm: '2軍・その他', prize: '賞金・分配金', transfer: '移籍金', subsidy: '親会社の支援' };
 const EXP_CATS = { payroll: '選手年俸', staff: 'スタッフ人件費', rent: '球場使用料', ops: '試合運営費', travel: '遠征費', maint: '設備維持費',
   ads: '広告宣伝費', promo: 'イベント費', scout: 'スカウト費', dev: '育成費', sales: '営業費', camp: 'キャンプ費', capex: '設備投資',
-  land: '土地取得', bonus: '契約金', transfer: '移籍金', interest: '支払利息', fc: 'ファンクラブ特典', townev: '街のイベント費', tax: '法人税等', other: 'その他' };
+  land: '土地取得', bonus: '契約金', transfer: '移籍金', interest: '支払利息', fc: 'ファンクラブ特典', townev: '街のイベント費', lux: 'ぜいたく税', tax: '法人税等', other: 'その他' };
 const BUDGET_ITEMS = {
   scout: { n: 'スカウト活動費', d: '調査の速さと範囲が変わる', min: 5000, max: 80000 },
   dev: { n: '育成費', d: '全選手の成長速度が変わる', min: 10000, max: 120000 },

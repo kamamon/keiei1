@@ -89,10 +89,10 @@ function pickStarter(tid, roles, dayNo) {
   const T = G.teams[tid]; const rot = roles.rot;
   for (let k = 0; k < rot.length; k++) {
     const idx = ((T.rotIdx || 0) + k) % rot.length; const p = P_(rot[idx]);
-    if (p && p.injW === 0 && dayNo - p.ls >= 6 && !benched(p)) { T.rotIdx = (idx + 1) % rot.length; p.ls = dayNo; return p; }
+    if (p && p.injW === 0 && dayNo - p.ls >= (LG.rest || 6) && !benched(p)) { T.rotIdx = (idx + 1) % rot.length; p.ls = dayNo; return p; }
   }
   const rotSet = new Set(rot);
-  let cands = rosterLv(tid, 1).filter(p => isP(p) && p.injW === 0 && dayNo - p.ls >= 5 && relAvail(p, dayNo) && !rotSet.has(p.id) && !benched(p));
+  let cands = rosterLv(tid, 1).filter(p => isP(p) && p.injW === 0 && dayNo - p.ls >= (LG.rest || 6) - 1 && relAvail(p, dayNo) && !rotSet.has(p.id) && !benched(p));
   if (!cands.length) cands = rosterLv(tid, 1).filter(p => isP(p) && p.injW === 0);
   if (!cands.length) cands = roster(tid).filter(p => isP(p));
   const p = maxBy(cands, x => spOvr(x) + x.a.sta * 0.2);
@@ -146,7 +146,7 @@ function playGame(hid, aid, ctx) {
   ctx = ctx || {};
   const S = { score: [0, 0], line: [[], []], inn: 1, half: 0, log: ctx.log ? [] : null, wc: [null, null], lc: [null, null], leader: -1, ctx, walkoff: false, hrs: [], gb: {} };
   S.park = parkHR(hid);
-  S.maxInn = ctx.post ? 15 : 12;
+  S.maxInn = ctx.post ? (LG.maxInnPost || 15) : (LG.maxInn || 12);
   const sides = [setupSide(aid, 0, S), setupSide(hid, 1, S)];
   S.sides = sides;
   for (const sd of sides) { const ps = newPS(sd.sp, true, S, sd); sd.ps = ps; sd.used.push(ps); sd.usedIds.add(sd.sp.id); }
@@ -267,6 +267,8 @@ function halfInning(S, off, def, half) {
   const lg = S.log; const rec = S.ctx.rec;
   changeCheck(S, def, false);
   def.ps.inRuns = 0;
+  // メジャー版：延長10回からは無死二塁で始める（前の回の最後の打者が二塁へ。この走者の得点は自責点にならない）
+  if (LG.ghost && S.inn >= 10 && !S.ctx.post && off.lu.length) { const n = off.lu.length; B[1] = { p: off.lu[(off.bi - 1 + n) % n].p, rp: def.ps, er: false }; }
   const scoreRun = (rn, bat, rbi) => {
     runs++; S.score[half]++;
     if (rec) rn.p.st.r++;

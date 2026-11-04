@@ -227,7 +227,7 @@ table.t.compact td { padding: 4px 6px; } table.t.compact th { padding: 5px 6px; 
 .cs-plate { position: relative; overflow: hidden; background: linear-gradient(var(--board), var(--board2)); color: var(--board-ink); border-radius: 8px; border-top: 8px solid var(--c); padding: 20px 16px 22px; text-align: center; box-shadow: var(--shadow); }
 .cs-plate::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: var(--c2); }
 .cs-plate .nm { font-family: var(--f-disp); font-size: 22px; line-height: 1.25; margin-top: 10px; overflow-wrap: anywhere; }
-.cs-plate .sub { font-size: 12px; opacity: .75; margin-top: 4px; }
+.cs-plate .sub { font-size: 12px; opacity: .75; margin-top: 4px; overflow-wrap: anywhere; white-space: normal; }
 .cs-side .stars { font-family: var(--f-body); font-size: 17px; letter-spacing: 2px; }
 .cf { display: grid; grid-template-columns: 8.5em minmax(0, 1fr); gap: 4px 12px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
 .cf:first-child { padding-top: 0; } .cf:last-child { border-bottom: 0; padding-bottom: 0; }
@@ -509,3 +509,27 @@ table.t.ed-attr { width: auto; }
 .ret-l { display: flex; flex-wrap: wrap; gap: 4px; }
 @media (max-width: 1100px) { .g-hof { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 480px) { .ret-row { grid-template-columns: 1fr; } }
+
+/* ---------- メジャー版 ---------- */
+/* タイトル：リーグを選ぶ（スコアボードの切り替えスイッチ） */
+.lgpick { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin: 18px auto 4px; max-width: 420px; border: 1px solid rgba(255, 255, 255, .22); border-radius: 6px; overflow: hidden; }
+.lgpick button { appearance: none; border: 0; background: transparent; color: var(--board-ink); padding: 10px 12px; cursor: pointer; display: grid; gap: 2px; text-align: center; font: inherit; }
+.lgpick button + button { border-left: 1px solid rgba(255, 255, 255, .22); }
+.lgpick button b { font-size: 15px; letter-spacing: .04em; }
+.lgpick button span { font-size: 11px; opacity: .75; }
+.lgpick button.on { background: #FFB547; color: #2A1A00; }
+.lgpick button.on span { opacity: .85; }
+.lgpick button:focus-visible { outline: 2px solid #FFB547; outline-offset: -2px; }
+.tg-h { font-family: var(--f-disp); font-size: 20px; margin: 20px 0 4px; }
+.tg-d { font-size: 13px; color: var(--ink2); margin: 10px 0 8px; font-weight: 700; letter-spacing: .06em; }
+/* 順位表：ワイルドカードの境目と地区1位 */
+table.t tr.wc-cut td { border-bottom: 2px dashed var(--lamp); }
+table.t tr.div1 td:first-child { color: var(--lamp); font-weight: 700; }
+/* ドラフトの指名順 */
+.dorder { display: flex; flex-wrap: wrap; gap: 6px; }
+.dorder span { display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px; font-size: 12px; }
+.dorder span b { font-family: var(--f-num, inherit); color: var(--ink2); font-size: 11px; }
+.dorder span.lot { border-color: var(--lamp); }
+.dorder span.me { background: var(--team-soft); border-color: var(--team); font-weight: 700; }
+.teamgrid.t5 { grid-template-columns: repeat(auto-fill, minmax(205px, 1fr)); }
+table.t.twrap td { white-space: normal; } table.t.twrap td:first-child { white-space: nowrap; vertical-align: top; }

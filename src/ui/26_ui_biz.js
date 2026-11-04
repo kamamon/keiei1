@@ -45,7 +45,7 @@ SCREENS.finance = () => {
     const ms = F.months.filter(m => m.y === G.year || F.months.length <= 12).slice(-12);
     const allM = F.months.slice(-24);
     body = `<div class="grid g2">${panel('収入の内訳', ri.length ? barChart(ri, { label: '収入の内訳' }) : '<div class="empty">まだ収入がありません</div>')}${panel('支出の内訳', ei.length ? barChart(ei, { label: '支出の内訳' }) : '<div class="empty">まだ支出がありません</div>')}</div><div style="height:16px"></div>` +
-      panel('月ごとの収支（直近24か月）', lineChart([{ n: '収入', c: 'var(--ball)', v: allM.map(m => m.rev / 10000) }, { n: '支出', c: 'var(--out)', v: allM.map(m => m.exp / 10000) }, { n: '資金', c: 'var(--lamp)', v: allM.map(m => m.cash / 10000) }], allM.map(m => `${String(m.y).slice(2)}/${m.m}`), { fmt: v => trimNum(v.toFixed(1)) + '億', label: '月ごとの収支' }));
+      panel('月ごとの収支（直近24か月）', lineChart([{ n: '収入', c: 'var(--ball)', v: allM.map(m => bigMoney(m.rev)) }, { n: '支出', c: 'var(--out)', v: allM.map(m => bigMoney(m.exp)) }, { n: '資金', c: 'var(--lamp)', v: allM.map(m => bigMoney(m.cash)) }], allM.map(m => `${String(m.y).slice(2)}/${m.m}`), { fmt: v => trimNum(v.toFixed(LG.mlb ? 2 : 1)) + (LG.mlb ? '億ドル' : '億'), label: '月ごとの収支' }));
   } else if (tab === 'budget') {
     const B = G.budget;
     const ads = adWeeklyCost() * 48;
@@ -57,7 +57,8 @@ SCREENS.finance = () => {
     const p = UI.f.tix || (UI.f.tix = Object.assign({}, G.tix));
     const now = previewAttendance(G.tix), nx = previewAttendance(p);
     const T = uT(); const rm = tixRefMul(T);
-    const rows = Object.entries(TIX).map(([k, d]) => `<tr><td>${d.n}</td><td class="num">${comma(Math.round(d.ref * rm / 100) * 100)}円</td><td><input class="inp num" style="width:110px" type="number" step="100" min="500" value="${p[k]}" data-c="tixSet" data-k="${k}"> 円</td><td class="small muted">${k === 'pre' ? `プレミアム席Lv${G.stad.fac.vip.lv}` : ''}</td></tr>`).join('');
+    const ref = refTix(T);
+    const rows = Object.entries(TIX).map(([k, d]) => `<tr><td>${d.n}</td><td class="num">${fmtPrice(ref[k])}</td><td><input class="inp num" style="width:110px" type="number" step="${LG.mlb ? 1 : 100}" min="${LG.mlb ? 5 : 500}" value="${priceShow(p[k])}" data-c="tixSet" data-k="${k}"> ${LG.mlb ? 'ドル' : '円'}</td><td class="small muted">${k === 'pre' ? `プレミアム席Lv${G.stad.fac.vip.lv}` : ''}</td></tr>`).join('');
     body = `<div class="grid g2">${panel('席種ごとの価格', `<table class="t"><thead><tr><th>席種</th><th class="num">相場</th><th>設定</th><th></th></tr></thead><tbody>${rows}</tbody></table><div class="row" style="margin-top:12px"><button class="btn" data-a="tixReset">相場に戻す</button><button class="btn pri" data-a="tixApply">この価格にする</button></div>`)}
       ${panel('1試合あたりの見込み', `<table class="t compact"><thead><tr><th></th><th class="num">現在</th><th class="num">変更後</th></tr></thead><tbody><tr><td>観客数</td><td class="num">${comma(now.att)}人</td><td class="num">${comma(nx.att)}人</td></tr><tr><td>入場率</td><td class="num">${fmtPct(now.fill)}</td><td class="num">${fmtPct(nx.fill)}</td></tr><tr><td>入場料収入</td><td class="num">${fmtOku(now.rev)}</td><td class="num">${fmtOku(nx.rev)}</td></tr></tbody></table>
       <p class="small muted">値上げすると客単価は上がりますが、観客が減ると飲食・グッズの売上も下がります。満員なら値上げの余地があります。</p>`)}</div>`;
@@ -68,7 +69,7 @@ SCREENS.finance = () => {
       ${panel('借入金の一覧', L.length ? `<table class="t compact"><thead><tr><th>借入年</th><th class="num">残高</th><th class="num">金利</th><th class="num">年間返済</th><th></th></tr></thead><tbody>${L.map((l, i) => `<tr><td>${l.taken}</td><td class="num">${fmtOku(l.bal)}</td><td class="num">${(l.rate * 100).toFixed(2)}%</td><td class="num">${fmtOku(l.pay)}</td><td><button class="btn xs" data-a="repay" data-i="${i}">繰り上げ返済</button></td></tr>`).join('')}</tbody></table>` : '<div class="empty">借入金はありません</div>')}</div>`;
   } else {
     const H = G.fin.hist.slice().reverse();
-    body = H.length ? panel('', `<div class="tw"><table class="t"><thead><tr><th>年度</th><th class="num">収入</th><th class="num">支出</th><th class="num">収支</th><th class="num">営業収支</th><th class="num">観客動員</th><th class="num">FC会員</th><th class="num">人気</th><th class="num">年俸総額</th><th class="num">年末資金</th><th class="num">順位</th></tr></thead><tbody>${H.map(h => `<tr><td>${h.y}</td><td class="num">${fmtOku(h.rev)}</td><td class="num">${fmtOku(h.exp)}</td><td class="num ${h.net < 0 ? 'neg' : 'pos'}">${fmtSigned(h.net)}</td><td class="num ${(h.op || 0) < 0 ? 'neg' : 'pos'}">${h.op != null ? fmtSigned(h.op) : '―'}</td><td class="num">${fmtPeople(h.att)}</td><td class="num">${fmtPeople(h.fc)}</td><td class="num">${h.pop}</td><td class="num">${fmtOku(h.pay)}</td><td class="num">${fmtOku(h.cash)}</td><td class="num">${h.rank}位</td></tr>`).join('')}</tbody></table></div>`, { flush: true }) : '<div class="empty">決算は12月末に確定します。</div>';
+    body = H.length ? panel('', `<div class="tw"><table class="t"><thead><tr><th>年度</th><th class="num">収入</th><th class="num">支出</th><th class="num">収支</th><th class="num">営業収支</th><th class="num">観客動員</th><th class="num">FC会員</th><th class="num">人気</th><th class="num">年俸総額</th><th class="num">年末資金</th><th class="num">順位</th></tr></thead><tbody>${H.map(h => `<tr><td>${h.y}</td><td class="num">${fmtOku(h.rev)}</td><td class="num">${fmtOku(h.exp)}</td><td class="num ${h.net < 0 ? 'neg' : 'pos'}">${fmtSigned(h.net)}</td><td class="num ${(h.op || 0) < 0 ? 'neg' : 'pos'}">${h.op != null ? fmtSigned(h.op) : '―'}</td><td class="num">${fmtPeople(h.att)}</td><td class="num">${fmtPeople(h.fc)}</td><td class="num">${h.pop}</td><td class="num">${fmtOku(h.pay)}</td><td class="num">${fmtOku(h.cash)}</td><td class="num">${rankStr(h.rank)}</td></tr>`).join('')}</tbody></table></div>`, { flush: true }) : '<div class="empty">決算は12月末に確定します。</div>';
   }
   return head + tb + body;
 };
@@ -81,8 +82,8 @@ function projectYear() {
 }
 ACT.budgetL = el => { const a = $('#bv-' + el.dataset.k); if (a) a.textContent = fmtOku(+el.value); };
 ACT.budget = el => { G.budget[el.dataset.k] = +el.value; render(); };
-ACT.tixSet = el => { UI.f.tix[el.dataset.k] = clamp(Math.round(+el.value / 100) * 100, 500, 50000); render(); };
-ACT.tixReset = () => { const rm = tixRefMul(uT()); UI.f.tix = { out: Math.round(TIX.out.ref * rm / 100) * 100, inn: Math.round(TIX.inn.ref * rm / 100) * 100, pre: Math.round(TIX.pre.ref * rm / 500) * 500 }; render(); };
+ACT.tixSet = el => { UI.f.tix[el.dataset.k] = LG.mlb ? priceFrom(clamp(Math.round(+el.value), 5, 1500)) : clamp(Math.round(+el.value / 100) * 100, 500, 50000); render(); };
+ACT.tixReset = () => { UI.f.tix = refTix(uT()); render(); };
 ACT.tixApply = () => { G.tix = Object.assign({}, UI.f.tix); toast('チケット価格を変更しました', 'good'); render(); };
 ACT.borrow = el => { if (borrow(+el.dataset.v, +el.dataset.y)) toast('借り入れました', 'good'); else toast('借入枠が足りません', 'bad'); render(); };
 ACT.repay = el => { const l = G.fin.loans[+el.dataset.i]; if (!l) return; repay(+el.dataset.i, l.bal); toast('返済しました'); render(); };
@@ -243,14 +244,14 @@ MODALS.deal = ({ kind, id }) => {
     ${log ? `<ul class="dlog">${log}</ul>` : ''}
     <hr class="sep">
     <div class="field"><span>契約年数</span>${seg('dealYrs', Array.from({ length: y1 - y0 + 1 }, (_, i) => [y0 + i, (y0 + i) + '年']), f.yrs)}<span class="small muted">相手が望む年数から外れるほど、出せる額は下がります</span></div>
-    <div class="field" style="margin-top:10px"><span>こちらの希望額（年・万円）</span><div class="row"><input class="inp num" style="width:150px" type="number" step="100" min="0" value="${f.ask}" data-i="dealAsk" aria-label="希望額（万円）"><span class="small muted" id="dealFmt">${fmtOku(f.ask)}</span></div>
+    <div class="field" style="margin-top:10px"><span>こちらの希望額（年・${moneyUnit()}）</span><div class="row"><input class="inp num" style="width:150px" type="number" step="${LG.mlb ? 1 : 100}" min="0" value="${moneyShow(f.ask)}" data-i="dealAsk" aria-label="希望額（${moneyUnit()}）"><span class="small muted" id="dealFmt">${fmtOku(f.ask)}</span></div>
       <div class="row" style="margin-top:6px">${[1.05, 1.1, 1.2].map(m => `<button class="btn xs" data-a="dealMul" data-v="${m}">相手の条件の${Math.round((m - 1) * 100)}%増し</button>`).join('')}<button class="btn xs" data-a="dealSet" data-v="${roundSal(v)}">相場</button>${hint ? `<button class="btn xs" data-a="dealSet" data-v="${hint.lo}">読みの下限</button>` : ''}</div></div>
     ${share < 1 ? `<p class="small muted" style="margin:10px 0 0">球場を借りているため、球団に入るのは${share * 10}割です。</p>` : ''}`,
     foot: `<button class="btn" data-a="closeModal">あとで</button><button class="btn" data-a="dealTake" data-k="${kind}" data-id="${id}">相手の条件で契約</button><button class="btn pri" data-a="dealGo" data-k="${kind}" data-id="${id}">この条件で提案する</button>` };
 };
 ACT.dealOpen = el => { const kind = el.dataset.k, id = +el.dataset.id; const o = dealFind(kind, id); if (!o) return; UI.f.deal = { kind, id, ask: roundSal(o.annual * 1.1), yrs: o.yrs }; openModal('deal', { kind, id }); render(); };
 ACT.dealYrs = el => { if (!UI.f.deal) return; UI.f.deal.yrs = +el.dataset.v; renderModalRoot(); };
-ACT.dealAsk = el => { const f = UI.f.deal; if (!f) return; f.ask = Math.max(0, Math.round(+el.value || 0)); const a = $('#dealFmt'); if (a) a.textContent = fmtOku(f.ask); };
+ACT.dealAsk = el => { const f = UI.f.deal; if (!f) return; f.ask = Math.max(0, LG.mlb ? moneyFrom(+el.value || 0) : Math.round(+el.value || 0)); const a = $('#dealFmt'); if (a) a.textContent = fmtOku(f.ask); };
 ACT.dealMul = el => { const f = UI.f.deal; if (!f) return; const o = dealFind(f.kind, f.id); if (!o) return; f.ask = roundSal(o.annual * +el.dataset.v); renderModalRoot(); };
 ACT.dealSet = el => { if (!UI.f.deal) return; UI.f.deal.ask = +el.dataset.v; renderModalRoot(); };
 ACT.dealGo = el => {
@@ -281,11 +282,11 @@ SCREENS.fans = () => {
       (H.length ? '<div style="height:16px"></div>' + panel('人気とファンクラブの推移', lineChart([{ n: '人気', c: 'var(--team)', v: H.map(h => h.pop) }], H.map(h => String(h.y)), { label: '人気の推移' })) : '');
   } else if (tab === 'fc') {
     const FC = G.fc;
-    const rows = Object.entries(FC_TIERS).map(([k, d]) => `<tr><td>${d.n}</td><td class="num">${fmtPct(d.mix, 0)}</td><td class="num">${comma(d.ref)}円</td><td><input class="inp num" style="width:100px" type="number" step="500" min="0" value="${FC.fee[k]}" data-c="fcFee" data-k="${k}"> 円</td></tr>`).join('');
+    const rows = Object.entries(FC_TIERS).map(([k, d]) => `<tr><td>${d.n}</td><td class="num">${fmtPct(d.mix, 0)}</td><td class="num">${fmtPrice(d.ref)}</td><td><input class="inp num" style="width:100px" type="number" step="${LG.mlb ? 5 : 500}" min="0" value="${priceShow(FC.fee[k])}" data-c="fcFee" data-k="${k}"> ${LG.mlb ? 'ドル' : '円'}</td></tr>`).join('');
     body = `<div class="grid g2">${panel('会費と特典', `<table class="t"><thead><tr><th>会員種別</th><th class="num">構成比</th><th class="num">相場</th><th>年会費</th></tr></thead><tbody>${rows}</tbody></table>
       <div class="field" style="margin-top:12px"><span>特典の充実度（会員1人あたり年${comma(FC.ben * 800)}円の費用）</span>${seg('fcBen', [1, 2, 3, 4, 5].map(i => [i, 'Lv' + i]), FC.ben)}</div>
       <div class="row" style="margin-top:12px"><button class="btn" data-a="fcCamp" ${FC.camp > 0 ? 'disabled' : ''}>入会キャンペーン（4週・毎週300万円）</button>${FC.camp > 0 ? `<span class="small">実施中 残り${FC.camp}週</span>` : ''}</div>`)}
-      ${panel('会員数', `<dl class="kv"><dt>会員数</dt><dd>${fmtPeople(Math.round(FC.members))}</dd><dt>目標水準</dt><dd>${fmtPeople(Math.round(fcTarget()))}</dd><dt>平均年会費</dt><dd>${comma(fcAvgFee())}円</dd><dt>今年の新規入会</dt><dd>${fmtPeople(Math.round(FC.joinY || 0))}</dd><dt>前回の継続率</dt><dd>${fmtPct(FC.lastRet || 0.8, 0)}</dd></dl><p class="small muted">会員は毎年1月に更新します。会費が相場より高いと入会が減り、特典が充実すると増えます。会員は球場にもよく来てくれます。</p>`)}</div>`;
+      ${panel('会員数', `<dl class="kv"><dt>会員数</dt><dd>${fmtPeople(Math.round(FC.members))}</dd><dt>目標水準</dt><dd>${fmtPeople(Math.round(fcTarget()))}</dd><dt>平均年会費</dt><dd>${fmtPrice(fcAvgFee())}</dd><dt>今年の新規入会</dt><dd>${fmtPeople(Math.round(FC.joinY || 0))}</dd><dt>前回の継続率</dt><dd>${fmtPct(FC.lastRet || 0.8, 0)}</dd></dl><p class="small muted">会員は毎年1月に更新します。会費が相場より高いと入会が減り、特典が充実すると増えます。会員は球場にもよく来てくれます。</p>`)}</div>`;
   } else if (tab === 'ads') {
     const rows = Object.entries(ADS).map(([k, d]) => `<tr><td><b>${d.n}</b><div class="small muted">${d.d}</div></td><td class="num">${fmtOku(d.cost)}</td><td>${seg('adLv', [0, 1, 2, 3].map(i => [i, i ? '強度' + i : '止める']), G.ads.lv[k] || 0, `data-k="${k}"`)}</td><td class="num">${fmtOku(d.cost * (G.ads.lv[k] || 0))}</td></tr>`).join('');
     const yearly = adWeeklyCost() * 48;
@@ -302,7 +303,7 @@ SCREENS.fans = () => {
   }
   return head + tb + body;
 };
-ACT.fcFee = el => { G.fc.fee[el.dataset.k] = clamp(Math.round(+el.value / 100) * 100, 0, 100000); render(); };
+ACT.fcFee = el => { G.fc.fee[el.dataset.k] = LG.mlb ? priceFrom(clamp(Math.round(+el.value), 0, 3000)) : clamp(Math.round(+el.value / 100) * 100, 0, 100000); render(); };
 ACT.fcBen = el => { G.fc.ben = +el.dataset.v; render(); };
 ACT.fcCamp = () => { G.fc.camp = 4; toast('入会キャンペーンを始めました', 'good'); render(); };
 ACT.adLv = el => { G.ads.lv[el.dataset.k] = +el.dataset.v; render(); };
@@ -434,7 +435,7 @@ SCREENS.plan = () => {
   const hist = G.hist.user;
   return `<h1 class="h1">中長期計画</h1><p class="lead">球団方針と3か年の目標を決め、オーナーの期待に応えます。オーナーの信頼は毎年12月末の評価で変わり、なくなると解任されます。</p>
   <div class="grid g2">
-    ${panel('オーナー', `<div class="row" style="gap:16px">${emblem(T, 52)}<div><div><b>${esc(T.parent)}</b></div><div class="small muted">親会社</div></div></div>
+    ${panel('オーナー', `<div class="row" style="gap:16px">${emblem(T, 52)}<div><div><b>${esc(T.parent)}</b></div><div class="small muted">${LG.mlb ? 'オーナーグループ' : '親会社'}</div></div></div>
       <div style="margin-top:12px"><div class="row sp"><span>オーナーの信頼</span><span class="stat-big">${Math.round(G.owner.trust)}</span></div>${bar(G.owner.trust, 100, G.owner.trust >= 50 ? 'ball' : G.owner.trust >= 25 ? 'strike' : 'out')}</div>
       <dl class="kv" style="margin-top:12px"><dt>期待される順位</dt><dd>${expectedRank()}位前後</dd><dt>収支の目標</dt><dd>${fmtSigned(expectedNet())}</dd><dt>補填してもらえる赤字</dt><dd>${fmtOku(subsidyCap())}まで</dd></dl>
       ${R ? `<p class="small muted" style="margin-top:10px">${R.y}年の評価：${R.d >= 0 ? '+' : ''}${Math.round(R.d)}（${R.notes.map(n => esc(n[0])).join('、')}）</p>` : ''}`)}
@@ -442,7 +443,7 @@ SCREENS.plan = () => {
   </div>
   <div style="height:16px"></div>${panel('3か年計画', planHtml)}
   ${G.project ? '<div style="height:16px"></div>' + panel('進行中の大型事業', `<p>新球場（${NEWSTAD[G.project.type].n}）：${G.project.ready ? '完成' : '残り' + G.project.wk + '週'}</p>${bar(G.project.tot - G.project.wk, G.project.tot, 'team')}`) : ''}
-  ${hist.length ? '<div style="height:16px"></div>' + panel('就任からの歩み', `<table class="t compact"><thead><tr><th>年</th><th>順位</th><th>成績</th><th class="num">観客</th><th class="num">収支</th><th class="num">信頼</th></tr></thead><tbody>${hist.slice().reverse().map(h => `<tr><td>${h.y}</td><td>${h.rank}位 ${h.champ ? '<span class="tag lamp">日本一</span>' : h.lg ? '<span class="tag b">優勝</span>' : ''}</td><td>${h.w}勝${h.l}敗${h.d ? h.d + '分' : ''}</td><td class="num">${fmtPeople(h.att)}</td><td class="num ${h.net < 0 ? 'neg' : 'pos'}">${fmtSigned(h.net)}</td><td class="num">${Math.round(h.trust)}</td></tr>`).join('')}</tbody></table>`, { flush: true }) : ''}`;
+  ${hist.length ? '<div style="height:16px"></div>' + panel('就任からの歩み', `<table class="t compact"><thead><tr><th>年</th><th>順位</th><th>成績</th><th class="num">観客</th><th class="num">収支</th><th class="num">信頼</th></tr></thead><tbody>${hist.slice().reverse().map(h => `<tr><td>${h.y}</td><td>${rankStr(h.rank)} ${h.champ ? `<span class="tag lamp">${LG.champ}</span>` : h.lg ? '<span class="tag b">優勝</span>' : ''}</td><td>${h.w}勝${h.l}敗${h.d ? h.d + '分' : ''}</td><td class="num">${fmtPeople(h.att)}</td><td class="num ${h.net < 0 ? 'neg' : 'pos'}">${fmtSigned(h.net)}</td><td class="num">${Math.round(h.trust)}</td></tr>`).join('')}</tbody></table>`, { flush: true }) : ''}`;
 };
 ACT.goalPick = el => { const s = UI.f.goals; const k = el.dataset.k; const i = s.indexOf(k); if (el.checked && i < 0) { if (s.length >= 3) { el.checked = false; toast('目標は3つまでです', 'bad'); return; } s.push(k); } if (!el.checked && i >= 0) s.splice(i, 1); render(); };
 ACT.planSet = () => { if (UI.f.goals.length !== 3) return; setPlan(UI.f.goals); UI.f.goals = []; toast('中期計画を策定しました', 'good'); render(); };

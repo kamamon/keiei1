@@ -5,6 +5,11 @@
    ========================================================= */
 let G = null;               // ゲーム状態（セーブ対象）
 let RNG = 20271;            // 乱数の内部状態（セーブ対象）
+let LG = { mode: 'npb', mlb: false };  // いまのリーグの決まりごと（01_league.js の setLeague で切り替える）
+/* メジャー版では、内部の金額（万円の単位）を 1単位＝300ドルとしてドルで表示する */
+const USD_RATE = 0.03;      // 1単位 → 万ドル
+function usdMan(units) { return units * USD_RATE; }
+function unitsFromUsdMan(man) { return man / USD_RATE; }
 
 function setSeed(s) { RNG = (s >>> 0) || 1; }
 function rnd() {
@@ -46,16 +51,31 @@ function hash2(a, b) { let h = (a * 374761393 + b * 668265263) | 0; h = Math.imu
 function trimNum(s) { if (s.indexOf('.') < 0) return s; s = s.replace(/0+$/, ''); if (s.endsWith('.')) s = s.slice(0, -1); return s; }
 function comma(n) { return Math.round(n).toLocaleString('ja-JP'); }
 
-/* 年俸表記: 1億3500万円 */
+/* 年俸表記: 1億3500万円（メジャー版は 1250万ドル） */
 function fmtSal(man) {
+  if (LG.mlb) return fmtSalUsd(man);
   man = Math.round(man);
   const neg = man < 0; const v = Math.abs(man);
   const oku = Math.floor(v / 10000), rest = v % 10000;
   const s = oku > 0 ? oku + '億' + (rest ? rest + '万' : '') : rest + '万';
   return (neg ? '−' : '') + s + '円';
 }
-/* 財務表記: 32.4億円 / 4,500万円 */
+function fmtSalUsd(units) {
+  const neg = units < 0; let v = Math.abs(usdMan(units));
+  let s;
+  if (v >= 10000) { v = Math.round(v / 10) * 10; const oku = Math.floor(v / 10000), rest = Math.round(v % 10000); s = oku + '億' + (rest ? rest + '万' : ''); }
+  else if (v >= 100) s = String(Math.round(v)) + '万';
+  else s = trimNum(v.toFixed(1)) + '万';
+  return (neg ? '−' : '') + s + 'ドル';
+}
+/* 財務表記: 32.4億円 / 4,500万円（メジャー版は 4.5億ドル / 1,200万ドル） */
 function fmtOku(man, d) {
+  if (LG.mlb) {
+    const neg = man < 0; const v = Math.abs(usdMan(man)); let s;
+    if (v >= 10000) { const dig = d !== undefined ? d : (v >= 1000000 ? 0 : (v >= 100000 ? 1 : 2)); s = trimNum((v / 10000).toFixed(dig)) + '億'; }
+    else s = (v >= 100 ? comma(v) : trimNum(v.toFixed(1))) + '万';
+    return (neg ? '−' : '') + s + 'ドル';
+  }
   man = Math.round(man);
   const neg = man < 0; const v = Math.abs(man);
   let s;
@@ -71,6 +91,17 @@ function fmtAvg(v) { if (!isFinite(v)) return '-'; const s = v.toFixed(3); retur
 function fmtEra(v) { return isFinite(v) ? v.toFixed(2) : '-'; }
 function fmtIP(outs) { const f = Math.floor(outs / 3), r = outs % 3; return r ? f + ' ' + r + '/3' : String(f); }
 function fmtPeople(n) { return n >= 10000 ? trimNum((n / 10000).toFixed(1)) + '万人' : comma(n) + '人'; }
+/* チケット・会費など「円」で持っている値段（メジャー版はドルで見せる） */
+function priceShow(yen) { return LG.mlb ? Math.round(yen * USD_RATE) : Math.round(yen); }
+function priceFrom(v) { return LG.mlb ? +v / USD_RATE : +v; }
+function fmtPrice(yen) { return LG.mlb ? comma(yen * USD_RATE) + 'ドル' : comma(yen) + '円'; }
+/* 入力欄の金額（万円／メジャー版は万ドル） */
+function moneyShow(units) { return LG.mlb ? Math.round(usdMan(units) * 10) / 10 : Math.round(units); }
+function moneyFrom(v) { return LG.mlb ? unitsFromUsdMan(+v) : +v; }
+function moneyUnit() { return LG.mlb ? '万ドル' : '万円'; }
+/* グラフ用の大きな金額（億円／メジャー版は億ドル） */
+function bigMoney(units) { return LG.mlb ? usdMan(units) / 10000 : units / 10000; }
+function bigUnit() { return LG.mlb ? '億ドル' : '億円'; }
 
 const GRADES = [[90, 'S'], [80, 'A'], [70, 'B'], [60, 'C'], [50, 'D'], [40, 'E'], [20, 'F'], [0, 'G']];
 function grade(v) { for (const [t, g] of GRADES) if (v >= t) return g; return 'G'; }

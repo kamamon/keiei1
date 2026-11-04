@@ -5,7 +5,7 @@
 const BAT_KEYS = ['con', 'pow', 'eye', 'spd', 'arm', 'fld'];
 const PIT_KEYS = ['vel', 'ctl', 'brk', 'sta'];
 const ATTR_JP = { con: 'ミート', pow: 'パワー', eye: '選球眼', spd: '走力', arm: '肩力', fld: '守備', vel: '球速', ctl: '制球', brk: '変化球', sta: 'スタミナ' };
-const MIN_SAL = 440, MIN_SAL_IK = 240;
+let MIN_SAL = 440, MIN_SAL_IK = 240;   // メジャー版では setLeague が書き換える
 const GT = [{ n: '早熟', g: 24, p: 27 }, { n: '普通', g: 27, p: 30 }, { n: '晩成', g: 29, p: 33 }];
 const POS_DEFW = { C: .40, SS: .36, '2B': .30, CF: .26, '3B': .24, OF: .20, LF: .16, RF: .18, '1B': .12, DH: 0 };
 const ARCH = {
@@ -36,12 +36,29 @@ function rpOvr(p) { return pitOvr(p.a, 'RP'); }
 function offVal(p) { const a = p.a; return a.con * .40 + a.pow * .36 + a.eye * .12 + a.spd * .12; }
 function defVal(p) { return p.a.fld * .65 + p.a.arm * .35; }
 
-function genJpName() {
+/* その国のリーグの「ふつうの選手」の名前（日本版は日本人、メジャー版はアメリカ・中南米の名前） */
+function genJpName() { return LG.mlb ? genUsName() : genJpReal(); }
+function genJpReal() {
   for (let i = 0; i < 60; i++) {
     const n = pick(SURNAMES) + ' ' + pick(GIVEN);
     if (!NAMESET.has(n)) { NAMESET.add(n); return n; }
   }
   return pick(SURNAMES) + ' ' + pick(GIVEN) + pick(['之', '郎', '人', '也']);
+}
+function genUsName(nat) {
+  nat = nat || (chance(0.27) ? 'LAT' : 'US');
+  const F = nat === 'LAT' ? LAT_FIRST : US_FIRST, L = nat === 'LAT' ? LAT_LAST : US_LAST;
+  for (let i = 0; i < 60; i++) {
+    const n = pick(F) + '・' + pick(L);
+    if (!NAMESET.has(n)) { NAMESET.add(n); return n; }
+  }
+  const n = pick(F) + '・' + pick(L) + pick(['Jr.', '2世', '3世']); NAMESET.add(n); return n;
+}
+/* 韓国・台湾の名前（姓・名の順） */
+function genAsName(nat) {
+  const F = nat === 'TW' ? TW_FAM : KR_FAM, Gv = nat === 'TW' ? TW_GIV : KR_GIV;
+  for (let i = 0; i < 60; i++) { const n = pick(F) + '・' + pick(Gv); if (!NAMESET.has(n)) { NAMESET.add(n); return n; } }
+  return pick(F) + '・' + pick(Gv) + pick(Gv);
 }
 function genFrName() {
   for (let i = 0; i < 60; i++) {
@@ -51,7 +68,12 @@ function genFrName() {
   return pick(F_FIRST) + '・' + pick(F_LAST) + 'Jr.';
 }
 let NAMESET = new Set();
-function lastName(p) { return p.frn ? p.name.split('・').pop() : p.name.split(' ')[0]; }
+function lastName(p) {
+  const n = p.name;
+  if (p.nat === 'KR' || p.nat === 'TW') return n.split('・')[0];
+  if (n.includes('・')) return n.split('・').pop().replace(/(Jr\.|2世|3世)$/, '');
+  return n.split(' ')[0];
+}
 function pickPers() { const ks = Object.keys(PERS_W); return wpick(ks, k => PERS_W[k]); }
 
 function blankBat() { return { g: 0, pa: 0, ab: 0, r: 0, h: 0, d: 0, t: 0, hr: 0, rbi: 0, bb: 0, hbp: 0, so: 0, sb: 0, cs: 0, sh: 0, sf: 0, gdp: 0, e: 0, pos: {} }; }
@@ -107,9 +129,14 @@ function genAttrs(p, cur, pot) {
 }
 
 /* 年俸の目安（能力ベース） */
-function valueSalary(o) { const s = 1400 * Math.exp((o - 45) * 0.105); return s > 50000 ? 50000 + (s - 50000) * 0.35 : s; }
-function roundSal(s) { return s >= 10000 ? Math.round(s / 500) * 500 : Math.round(s / 10) * 10; }
+function valueSalary(o) { if (LG.mlb) return valueSalaryMLB(o); const s = 1400 * Math.exp((o - 45) * 0.105); return s > 50000 ? 50000 + (s - 50000) * 0.35 : s; }
+/* メジャー版はドルで切りのよい額（1000万ドル未満は1万ドル、それ以上は10万ドル単位）にそろえる */
+function roundSal(s) {
+  if (LG.mlb) { const usd = s * 300; const st = usd >= 1e7 ? 1e5 : 1e4; return Math.round(usd / st) * st / 300; }
+  return s >= 10000 ? Math.round(s / 500) * 500 : Math.round(s / 10) * 10;
+}
 function marketSalary(p) {
+  if (LG.mlb) return marketSalaryMLB(p);
   let s = valueSalary(ovr(p));
   s *= clamp(0.35 + p.svc * 0.11, 0.35, 1.0);
   if (p.frn) s *= 1.25;
@@ -127,7 +154,7 @@ function pVal(p, tid) {
   if (p.age <= 27) { const room = Math.max(0, pt - o); v += Math.pow(room, 1.3) * (p.age <= 22 ? 2.2 : p.age <= 25 ? 1.6 : 0.9); }
   if (p.age >= 31) v *= Math.max(0.25, 1 - (p.age - 30) * 0.08);
   const fair = valueSalary(o);
-  v -= Math.max(0, p.sal - fair) / 1000 * 0.8 * Math.max(1, p.yrs);
+  v -= Math.max(0, p.sal - fair) / (1000 * (LG.salK || 1)) * 0.8 * Math.max(1, p.yrs);
   if (p.injW > 8) v *= 0.8;
   return Math.max(0, v);
 }

@@ -1,7 +1,7 @@
 /* =========================================================
    経営：観客動員・収入・支出・人気・ファンクラブ・広告・スポンサー
    ========================================================= */
-function tName(tid) { const t = G.teams[tid]; return t ? t.city + t.nick : '―'; }
+function tName(tid) { const t = G.teams[tid]; return t ? t.city + (LG.mlb ? '・' : '') + t.nick : '―'; }
 function tShort(tid) { const t = G.teams[tid]; return t ? t.nick : '―'; }
 function stadOf(tid) { return isUser(tid) ? G.stad : G.teams[tid].stad; }
 function capOf(tid) { const s = stadOf(tid); return isUser(tid) ? s.cap + s.fac.seats.lv * 2000 : s.cap; }
@@ -26,13 +26,15 @@ function basePerf(T) {
 }
 function demandOf(hid, aid, dayIdx) {
   const T = G.teams[hid], O = G.teams[aid];
-  let D = 6000 + T.market * 2600 + T.pop * 300;
+  let D = (6000 + T.market * 2600 + T.pop * 300) * (LG.mlb ? 1.08 : 1);
   D *= basePerf(T);
-  D *= [0.80, 0.80, 0.84, 1.0, 1.20, 1.14][dayIdx % 6];
+  const da = LG.dayAtt || [0.80, 0.80, 0.84, 1.0, 1.20, 1.14];
+  D *= da[dayIdx % da.length];
   const st = stadOf(hid);
   let mf = ({ 3: 0.95, 4: 0.92, 5: 1.0, 6: 0.95, 7: 1.08, 8: 1.10, 9: 1.0, 10: 1.1 })[G.month] || 1;
   if (st.dome) mf = Math.max(mf, 1.0);
-  if (curTurn() === 16) mf *= 1.12;
+  if (curTurn() === 16 && !LG.mlb) mf *= 1.12;
+  if (LG.mlb && curTurn() === 25) mf *= 1.08;
   D *= mf;
   D *= 0.90 + O.pop / 100 * 0.22;
   if (isUser(hid) && G.flags.buzzW > 0) D *= 1 + (G.flags.buzz || 0);
@@ -50,6 +52,12 @@ function stadSatisfaction() {
   return clamp(s, 15, 100);
 }
 function tixRefMul(T) { return 0.8 + T.market * 0.06; }
+/* 相場どおりのチケット価格（円。メジャー版はドルで切りのよい額） */
+function refTix(T) {
+  const rm = tixRefMul(T);
+  if (LG.mlb) { const d = (y, st) => Math.round(y * USD_RATE / st) * st / USD_RATE; return { out: d(TIX.out.ref * rm, 1), inn: d(TIX.inn.ref * rm, 1), pre: d(TIX.pre.ref * rm, 5) }; }
+  return { out: Math.round(TIX.out.ref * rm / 100) * 100, inn: Math.round(TIX.inn.ref * rm / 100) * 100, pre: Math.round(TIX.pre.ref * rm / 500) * 500 };
+}
 function tierCaps(cap) {
   const pre = 0.04 + G.stad.fac.vip.lv * 0.02;
   return { out: cap * 0.30, inn: cap * (0.70 - pre), pre: cap * pre };
@@ -89,7 +97,7 @@ function homeGameEconomy(hid, aid, dayIdx, post) {
   const T = G.teams[hid];
   const cap = capOf(hid);
   let D = demandOf(hid, aid, dayIdx);
-  if (post) D *= post === 'gs' ? 1.8 : 1.5;
+  if (post) D *= post === 'gs' || post === 'ws' ? 1.8 : post === 'lcs' ? 1.65 : 1.5;
   if (!isUser(hid)) {
     D *= (0.94 + (T.facLv || 2) * 0.03) * rf(0.94, 1.06);
     const att = Math.round(Math.min(cap, D));
@@ -99,8 +107,9 @@ function homeGameEconomy(hid, aid, dayIdx, post) {
   D *= userAttMult() * rf(0.94, 1.06);
   D += G.fc.members * 0.012;
   let promo = null;
-  if (!post && dayIdx % 6 >= 3) promo = pickPromo();
-  if (!promo && !post && G.promo.queue.length && dayIdx % 6 === 2 && chance(0.3)) promo = pickPromo();
+  const dpw = LG.dpw || 6, wd = dayIdx % dpw, wkend = LG.weekend || [3, 4, 5];
+  if (!post && wkend.includes(wd)) promo = pickPromo();
+  if (!promo && !post && G.promo.queue.length && wd === wkend[0] - 1 && chance(0.3)) promo = pickPromo();
   const pd = promo ? PROMOS[promo] : null;
   if (pd) D *= 1 + pd.att * (1 + G.stad.fac.light.lv * 0.08);
   const sale = userTicketSale(D, cap, post ? 1.3 : 1);
@@ -134,9 +143,9 @@ function homeGameEconomy(hid, aid, dayIdx, post) {
 }
 function previewAttendance(prices) {
   const T = uT(); const save = G.tix; G.tix = prices || G.tix;
-  let tot = 0, rev = 0; const n = 6;
+  let tot = 0, rev = 0; const n = LG.dpw || 6;
   for (let d = 0; d < n; d++) {
-    let D = demandOf(T.id, (T.id + 1 + d) % 12, d) * userAttMult() + G.fc.members * 0.012;
+    let D = demandOf(T.id, (T.id + 1 + d) % G.teams.length, d) * userAttMult() + G.fc.members * 0.012;
     const s = userTicketSale(D, capOf(T.id), 1); tot += s.att; rev += s.rev;
   }
   G.tix = save;
@@ -151,7 +160,7 @@ function adEffect(key) {
   for (const k in G.ads.lv) { const lv = G.ads.lv[k]; if (lv > 0 && ADS[k][key]) e += ADS[k][key] * Math.pow(lv, 0.75) * prm; }
   return e;
 }
-function tvAnnual(T) { return (T.market * 16000 + T.pop * 800); }
+function tvAnnual(T) { return LG.mlb ? tvAnnualMLB(T) : (T.market * 16000 + T.pop * 800); }
 
 /* ---------- ファンクラブ ---------- */
 function fcAvgFee() { let s = 0; for (const k in FC_TIERS) s += FC_TIERS[k].mix * G.fc.fee[k]; return s; }
@@ -443,7 +452,7 @@ function repay(idx, amount) {
 }
 
 /* ---------- 毎週の収支 ---------- */
-function otherCost(T) { return 30000 + T.market * 20000; }
+function otherCost(T) { return LG.mlb ? otherCostMLB(T) : 30000 + T.market * 20000; }
 function officeCost(T) { return 20000 + T.market * 6000; }
 function weeklyFinance() {
   const T = uT(); const t = curTurn();

@@ -23,7 +23,7 @@ function canMove(p, to) {
     if (p.lv === 3) return '育成選手は1軍に上げられません（先に支配下登録）';
     if (p.injW > 0) return '故障中です';
     if (rosterLv(ut, 1).length >= LIM.first) return `1軍登録は${LIM.first}人までです`;
-    if (p.frn && firstFrnCount(ut) >= LIM.frn1) return '1軍の外国人枠（4人）が埋まっています';
+    if (!LG.mlb && p.frn && firstFrnCount(ut) >= LIM.frn1) return '1軍の外国人枠（4人）が埋まっています';
   }
   return '';
 }
@@ -49,7 +49,7 @@ SCREENS.roster = () => {
   };
   const common = (pre) => [
     { k: 'num', l: '背番', v: p => p.num, h: p => `<span class="num">${numStr(p)}</span>`, num: true },
-    { k: 'name', l: '名前', v: p => p.name, h: p => `${pLink(p)} ${p.frn ? '<span class="tag">外</span>' : ''}${genTag(p, true)} ${statusTag(p)}${mlbTrying(p) ? ' <span class="tag lamp">メジャー交渉中</span>' : ''}` },
+    { k: 'name', l: '名前', v: p => p.name, h: p => `${pLink(p)} ${p.frn ? '<span class="tag">外</span>' : ''}${LG.mlb && p.nat && p.nat !== 'US' && p.nat !== 'LAT' ? '<span class="tag">' + ({ JP: '日', KR: '韓', TW: '台' })[p.nat] + '</span>' : ''}${genTag(p, true)} ${statusTag(p)}${mlbTrying(p) ? ' <span class="tag lamp">メジャー交渉中</span>' : ''}` },
     { k: 'pos', l: pre === 'p' ? '役割' : '位置', v: p => pre === 'p' ? roleOf(p) : p.pos, h: p => posCell(p) },
     { k: 'age', l: '年齢', v: p => p.age, num: true, h: p => p.age },
     { k: 'ovr', l: '総合', v: ovr, h: p => av(ovr(p)) },
@@ -74,7 +74,7 @@ SCREENS.roster = () => {
   <div class="row sp" style="margin-bottom:12px">
     <div class="row small">
       <span class="tag ${f1 > LIM.first ? 'o' : ''}">1軍 ${f1}/${LIM.first}</span><span class="tag ${sh > LIM.shihai ? 'o' : ''}">支配下 ${sh}/${LIM.shihai}</span>
-      <span class="tag ${firstFrnCount(ut) > LIM.frn1 ? 'o' : ''}">1軍外国人 ${firstFrnCount(ut)}/${LIM.frn1}</span><span class="tag">育成 ${lists['3'].length}</span>
+      ${LG.mlb ? `<span class="tag ${lists['3'].length > LIM.ikusei ? 'o' : ''}">マイナー契約 ${lists['3'].length}/${LIM.ikusei}</span><span class="tag">投手 ${lists['1'].filter(isP).length}/13</span>` : `<span class="tag ${firstFrnCount(ut) > LIM.frn1 ? 'o' : ''}">1軍外国人 ${firstFrnCount(ut)}/${LIM.frn1}</span><span class="tag">育成 ${lists['3'].length}</span>`}
     </div>
     <div class="row">
       <label class="chk small"><input type="checkbox" data-c="setUser" data-k="autoSwap" ${G.user.autoSwap ? 'checked' : ''}>故障者を自動で入れ替え</label>
@@ -82,7 +82,7 @@ SCREENS.roster = () => {
       <button class="btn sm" data-a="autoRoster">おまかせで組み直す</button>
     </div>
   </div>
-  ${tabs('roster', [['1', '1軍', lists['1'].length], ['2', '2軍', lists['2'].length], ['3', '育成', lists['3'].length], ['inj', '故障者', lists.inj.length], ['all', '全員', all.length]], tab)}
+  ${tabs('roster', [['1', '1軍', lists['1'].length], ['2', '2軍', lists['2'].length], ['3', lv3Name(), lists['3'].length], ['inj', '故障者', lists.inj.length], ['all', '全員', all.length]], tab)}
   <div class="row" style="margin-bottom:10px">${seg('rosterF', [['all', 'すべて'], ['pit', '投手'], ['bat', '野手']], f)}</div>
   <div class="stack">
   ${showP ? panel(`投手 ${pit.length}人`, table('ro-p' + tab, pCols, pit, { sort: { k: 'ovr', d: true } }), { flush: true }) : ''}
@@ -109,10 +109,10 @@ MODALS.player = ({ id }) => {
     return `<div class="row" style="gap:10px"><span style="width:64px" class="small">${ATTR_JP[k]}</span><div style="flex:1">${bar(v, 100, '', showCap ? c : null)}</div><span style="width:74px;text-align:right">${av(v)}</span></div>`;
   }).join('');
   const T = p.team >= 0 ? G.teams[p.team] : null;
-  const fa = p.frn ? '外国人選手（FAの対象外）' : faEligible(p) ? '<span class="lamp">FA権あり（今オフ行使可能）</span>' : p.svc >= (p.faUsed ? p.faUsed + 4 : 8) ? 'FA権あり' : `取得まであと${(p.faUsed ? p.faUsed + 4 : 8) - p.svc}年`;
-  const kfa = p.frn ? '' : p.svc >= kfaNeed(p) ? '<span class="lamp">海外FA権あり</span>' : `海外FA権まであと${kfaNeed(p) - p.svc}年`;
+  const fa = LG.mlb ? mlbSvcText(p) : p.frn ? '外国人選手（FAの対象外）' : faEligible(p) ? '<span class="lamp">FA権あり（今オフ行使可能）</span>' : p.svc >= (p.faUsed ? p.faUsed + 4 : 8) ? 'FA権あり' : `取得まであと${(p.faUsed ? p.faUsed + 4 : 8) - p.svc}年`;
+  const kfa = p.frn || LG.mlb ? '' : p.svc >= kfaNeed(p) ? '<span class="lamp">海外FA権あり</span>' : `海外FA権まであと${kfaNeed(p) - p.svc}年`;
   const tryX = (G.mlbTry || []).find(x => x.pid === p.id);
-  const posts = mine && !postingCheck(p);
+  const posts = mine && !LG.mlb && !postingCheck(p);
   const stPos = !isP(p) && p.st && p.st.pos ? Object.entries(p.st.pos).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${POS_S[k] || k}${v}`).join(' ') : '';
   const rows = p.hist.slice().reverse().map(h => `<tr><td>${h.y}</td><td>${tMark(h.t)}</td>${isP(p) ? `<td class="num">${h.s.g}</td><td class="num">${h.s.w}-${h.s.l}</td><td class="num">${h.s.sv}</td><td class="num">${h.s.hld}</td><td class="num">${fmtIP(h.s.outs)}</td><td class="num">${h.s.so}</td><td class="num">${fmtEra(pEra(h.s))}</td>` :
     `<td class="num">${h.s.g}</td><td class="num">${h.s.pa}</td><td class="num">${fmtAvg(bAvg(h.s))}</td><td class="num">${h.s.hr}</td><td class="num">${h.s.rbi}</td><td class="num">${h.s.sb}</td><td class="num">${bOps(h.s).toFixed(3)}</td>`}<td class="num">${h.war}</td><td class="num">${fmtSal(h.sal)}</td></tr>`).join('');
@@ -142,8 +142,8 @@ MODALS.player = ({ id }) => {
     title: `<span class="num faint">${p.num >= 0 ? numStr(p) : ''}</span> ${esc(p.name)} <span class="small muted">${POS_JP[p.pos]}${isP(p) ? '（' + (p.pt === 'SP' ? '先発' : '救援') + '型）' : ''}</span> ${genTag(p)}`, size: 'wide',
     body: `<div class="grid g2">
       <div class="stack">
-        <div class="row">${T ? emblem(T, 34) : ''}<div><div>${T ? esc(tName(T.id)) : '所属なし（自由契約）'} ${p.lv === 3 ? '<span class="tag">育成</span>' : p.lv === 1 ? '<span class="tag team">1軍</span>' : '<span class="tag">2軍</span>'} ${statusTag(p)}</div>
-          <div class="small muted">${p.age}歳　${handStr(p)}　${p.frn ? '外国人（' + esc(p.prFrom || '海外') + '）' : esc(REGIONS[p.home]) + '出身'}　${p.dr ? p.dr.y + '年ドラフト' + (p.dr.ik ? '育成' : '') + p.dr.r + '位' : esc(p.from || '')}${p.prInfo && p.prInfo.nick ? '　「' + esc(p.prInfo.nick) + '」' : ''}</div></div></div>
+        <div class="row">${T ? emblem(T, 34) : ''}<div><div>${T ? esc(tName(T.id)) : '所属なし（自由契約）'} ${p.lv === 3 ? `<span class="tag">${lv3Name()}</span>` : p.lv === 1 ? '<span class="tag team">1軍</span>' : '<span class="tag">2軍</span>'} ${statusTag(p)}</div>
+          <div class="small muted">${p.age}歳　${handStr(p)}　${p.frn ? '外国人（' + esc(p.prFrom || '海外') + '）' : LG.mlb ? esc(birthOf(p)) : esc(REGIONS[p.home]) + '出身'}　${p.dr ? p.dr.y + '年ドラフト' + (p.dr.ik ? '育成' : '') + p.dr.r + (LG.mlb ? '巡目' + (p.dr.no ? '（全体' + p.dr.no + '位）' : '') : '位') : esc(p.prFrom || p.from || '')}${p.prInfo && p.prInfo.nick ? '　「' + esc(p.prInfo.nick) + '」' : ''}</div></div></div>
         <div class="row" style="gap:20px"><div><div class="small muted">総合</div><div class="row">${gr(ovr(p))}<span class="stat-big">${ovr(p)}</span></div></div>
           <div><div class="small muted">伸びしろ</div><div>${mine ? gr(potv(p)) + ' <span class="small muted">' + GT[p.gt].n + '</span>' : '<span class="gr Q">?</span>'}</div></div>
           <div><div class="small muted">調子・やる気</div><div>${formTag(p.form)} ${formName(p.form)}　${morDot(p.mor)} ${Math.round(p.mor)}</div></div></div>
@@ -154,7 +154,7 @@ MODALS.player = ({ id }) => {
       </div>
       <div class="stack">
         <dl class="kv"><dt>年俸</dt><dd>${fmtSal(p.sal)}${p.ren && p.ren.st === 'signed' ? `<div class="small muted">来季 ${fmtSal(p.ren.sal)}・${p.ren.yrs}年</div>` : ''}</dd><dt>契約残り</dt><dd>${p.yrs}年</dd>
-          <dt>1軍在籍（FA）</dt><dd>${p.svc}年　<span class="small">${fa}</span>${kfa ? `<div class="small">${kfa}</div>` : ''}${tryX ? `<div class="small lamp">メジャー球団と交渉中（${HOW_JP[tryX.how]}・あと${Math.max(1, tryX.wk)}週ほど）</div>` : ''}</dd><dt>性格</dt><dd>${esc(PERS[p.per].n)}<div class="small muted">${esc(PERS[p.per].d)}</div></dd>
+          <dt>${LG.mlb ? 'サービスタイム' : '1軍在籍（FA）'}</dt><dd>${p.svc}年　<span class="small">${fa}</span>${kfa ? `<div class="small">${kfa}</div>` : ''}${tryX ? `<div class="small lamp">メジャー球団と交渉中（${HOW_JP[tryX.how]}・あと${Math.max(1, tryX.wk)}週ほど）</div>` : ''}</dd><dt>性格</dt><dd>${esc(PERS[p.per].n)}<div class="small muted">${esc(PERS[p.per].d)}</div></dd>
           <dt>故障のしやすさ</dt><dd>${p.inj >= 65 ? '<span class="neg">多い</span>' : p.inj >= 40 ? '普通' : '<span class="pos">少ない</span>'}${p.injW > 0 ? `<div class="small neg">${esc(p.injN)}（残り${Math.ceil(p.injW)}週）</div>` : ''}</dd>
           <dt>人気</dt><dd>${Math.round(p.pop)}</dd><dt>通算WAR</dt><dd>${careerWar(p)}</dd></dl>
         ${hons ? `<div><div class="small muted" style="margin-bottom:4px">勲章</div><div class="hons">${hons}</div></div>` : ''}
@@ -240,7 +240,7 @@ SCREENS.lineup = () => {
         <td class="num">${okp ? fmtAvg(bAvg(p.st)) : ''}</td><td class="num">${okp ? p.st.hr : ''}</td><td>${okp ? av(p.a.con) : ''}</td><td>${okp ? av(p.a.pow) : ''}</td><td>${okp ? av(p.a.spd) : ''}</td><td>${okp ? fitLabel(p, e.pos) : ''}</td></tr>`;
     }).join('')}</tbody></table>`;
     const pSel = (key, i, cur) => `<select class="inp" data-c="pitSel" data-k="${key}" data-i="${i}">${opt(-1, '（自動）', cur == null ? -1 : cur)}${pits1.filter(x => x.injW === 0).map(x => opt(x.id, `${x.name}（${x.pt === 'SP' ? '先' : '救'}・${ovr(x)}）`, cur)).join('')}</select>`;
-    pitHtml = `<div class="grid g2"><div><h4 style="margin:0 0 6px">先発ローテーション</h4>${[0, 1, 2, 3, 4, 5].map(i => `<div class="row" style="margin-bottom:6px"><span class="num" style="width:20px">${i + 1}</span>${pSel('rot', i, m.rot[i])}</div>`).join('')}</div>
+    pitHtml = `<div class="grid g2"><div><h4 style="margin:0 0 6px">先発ローテーション</h4>${Array.from({ length: LG.rot || 6 }, (_, i) => i).map(i => `<div class="row" style="margin-bottom:6px"><span class="num" style="width:20px">${i + 1}</span>${pSel('rot', i, m.rot[i])}</div>`).join('')}</div>
       <div><h4 style="margin:0 0 6px">救援</h4><div class="row" style="margin-bottom:6px"><span style="width:84px">抑え</span>${pSel('cl', 0, m.cl)}</div>
       <div class="row" style="margin-bottom:6px"><span style="width:84px">セットアッパー</span>${pSel('su', 0, m.su[0])}</div><div class="row" style="margin-bottom:6px"><span style="width:84px">7回担当</span>${pSel('su', 1, m.su[1])}</div>
       <p class="small muted">そのほかの投手は監督が状況に応じて起用します。故障や疲労で投げられない投手は自動で代わりを立てます。</p></div></div>`;
@@ -293,7 +293,7 @@ SCREENS.training = () => {
   const list = tab === 'young' ? ps.filter(p => p.age <= 25) : tab === 'p' ? ps.filter(isP) : ps.filter(p => !isP(p));
   const winterOpen = t >= 40 && t <= 47;
   const cols = [
-    { k: 'name', l: '名前', v: p => p.name, h: p => `${pLink(p)} ${p.lv === 1 ? '<span class="tag team">1軍</span>' : p.lv === 3 ? '<span class="tag">育成</span>' : ''}` },
+    { k: 'name', l: '名前', v: p => p.name, h: p => `${pLink(p)} ${p.lv === 1 ? '<span class="tag team">1軍</span>' : p.lv === 3 ? `<span class="tag">${lv3Name()}</span>` : ''}` },
     { k: 'age', l: '年齢', v: p => p.age, num: true, h: p => p.age },
     { k: 'ovr', l: '総合', v: ovr, h: p => av(ovr(p)) },
     { k: 'pot', l: '伸びしろ', v: potv, h: p => gr(potv(p)) + ' <span class="small faint">' + GT[p.gt].n + '</span>' },
@@ -326,7 +326,7 @@ ACT.winter = el => {
 /* ---------- キャンプ ---------- */
 SCREENS.camp = () => {
   const t = curTurn();
-  const c = G.camp || { site: 'miyazaki', theme: 'balance', int: 'normal', guest: false };
+  const c = G.camp || { site: defaultCampSite(), theme: 'balance', int: 'normal', guest: false };
   const locked = t >= 4;
   const site = Object.entries(CAMP_SITES).map(([k, s]) => `<button class="tcard ${c.site === k ? 'on' : ''}" style="--c:var(--lamp)" data-a="campSet" data-k="site" data-v="${k}" ${locked ? 'disabled' : ''}><div class="nm">${s.n}</div><div class="small muted">${s.d}</div><div class="row sp small"><span>費用 ${fmtOku(s.cost)}</span><span>成長×${s.grow}</span><span>人気+${s.pop}</span></div></button>`).join('');
   const theme = Object.entries(CAMP_THEMES).map(([k, s]) => `<button class="tcard ${c.theme === k ? 'on' : ''}" style="--c:var(--team)" data-a="campSet" data-k="theme" data-v="${k}" ${locked ? 'disabled' : ''}><div class="nm" style="font-size:15px">${s.n}</div><div class="small muted">${s.d}</div></button>`).join('');
@@ -344,7 +344,24 @@ SCREENS.camp = () => {
     ${top.length ? panel('キャンプで伸びた選手', `<table class="t compact"><tbody>${top.map(p => `<tr><td>${pLink(p)}</td><td>${POS_JP[p.pos]}</td><td class="num">総合 ${ovr(p)}</td><td class="num pos">+${(p.grow / (isP(p) ? 4 : 6)).toFixed(1)}</td></tr>`).join('')}</tbody></table>`) : ''}
   </div>`;
 };
-function ensureCamp() { if (!G.camp) G.camp = { site: 'miyazaki', theme: 'balance', int: 'normal', guest: false }; return G.camp; }
+function ensureCamp() { if (!G.camp) G.camp = { site: defaultCampSite(), theme: 'balance', int: 'normal', guest: false }; return G.camp; }
 ACT.campSet = el => { if (curTurn() >= 4) return; ensureCamp()[el.dataset.k] = el.dataset.v; render(); };
 ACT.campInt = el => { if (curTurn() >= 4) return; ensureCamp().int = el.dataset.v; render(); };
 ACT.campGuest = el => { ensureCamp().guest = el.checked; render(); };
+
+/* メジャー版：サービスタイムと契約の段階 */
+function mlbSvcText(p) {
+  const c = svcClass(p);
+  if (c === 'minor') return 'マイナー契約（40人枠の外）';
+  if (p.intlFA) return '<span class="lamp">契約が切れるとFA</span>';
+  if (c === 'fa') return faEligible(p) ? '<span class="lamp">今オフFA</span>' : 'FA権あり';
+  if (c === 'arb') return `年俸調停の権利あり（FAまであと${LG.faYears - p.svc}年）`;
+  return `調停権なし（調停まであと${LG.arbYears - p.svc}年・FAまであと${LG.faYears - p.svc}年）`;
+}
+const NAT_JP = { US: 'アメリカ', LAT: '中南米', JP: '日本', KR: '韓国', TW: '台湾' };
+function birthOf(p) {
+  if (p.prFrom) return p.prFrom + 'から';
+  if (p.nat === 'LAT') return ['ドミニカ共和国', 'ベネズエラ', 'プエルトリコ', 'キューバ', 'メキシコ', 'パナマ', 'コロンビア'][p.id % 7] + '出身';
+  if (p.nat && p.nat !== 'US') return NAT_JP[p.nat] + '出身';
+  return (REGIONS[p.home] || 'アメリカ') + '出身';
+}

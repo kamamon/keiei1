@@ -52,7 +52,7 @@ function osNotify(list) {
     if (!G.user.osNote || typeof Notification === 'undefined' || Notification.permission !== 'granted' || !document.hidden) return;
     const hi = list.filter(n => n.pr === 'hi');
     if (!hi.length) return;
-    const body = hi.length === 1 ? hi[0].t : `${hi[0].t}　ほか${hi.length - 1}件`;
+    const body = mlbText(hi.length === 1 ? hi[0].t : `${hi[0].t}　ほか${hi.length - 1}件`);
     new Notification(`球団社長：${tName(G.user.tid)}`, { body, tag: 'kyudan-' + hi[0].id });
   } catch (e) { }
 }

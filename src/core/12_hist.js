@@ -40,8 +40,9 @@ function histYears(a, b) { const y = G.year; return ri(Math.min(a, b), Math.max(
 function seedHistory(keepNumbers) {
   const y = G.year;
   G.recs = { lg: {}, tm: {}, car: {}, feats: [] };
-  for (const k in REC_SEED_LG) G.recs.lg[k] = { v: REC_SEED_LG[k], name: genJpName(), tid: ri(0, 11), y: histYears(y - 75, y - 8), seed: true };
-  for (const k in REC_SEED_CAR) G.recs.car[k] = { v: REC_SEED_CAR[k], name: genJpName(), tid: ri(0, 11), y: histYears(y - 60, y - 10), seed: true };
+  const nt = G.teams.length - 1;
+  for (const k in REC_SEED_LG) G.recs.lg[k] = { v: REC_SEED_LG[k], name: genJpName(), tid: ri(0, nt), y: histYears(y - (LG.mlb ? 110 : 75), y - 8), seed: true };
+  for (const k in REC_SEED_CAR) G.recs.car[k] = { v: REC_SEED_CAR[k], name: genJpName(), tid: ri(0, nt), y: histYears(y - (LG.mlb ? 90 : 60), y - 10), seed: true };
   for (const T of G.teams) {
     const r = {};
     for (const k in REC_SEED_TM) { const [a, b] = REC_SEED_TM[k]; r[k] = { v: REC_DEFS[k].rate ? Math.round(rf(a, b) * 1000) / 1000 : ri(a, b), name: genJpName(), tid: T.id, y: histYears(y - 70, y - 3), seed: true }; }
@@ -58,15 +59,15 @@ function seedHistory(keepNumbers) {
 }
 function seedHof() {
   const out = []; const y = G.year;
-  const n = ri(14, 18);
+  const n = LG.mlb ? ri(30, 38) : ri(14, 18);
   for (let i = 0; i < n; i++) {
     const kind = wpick(['bat', 'sp', 'rp'], k => ({ bat: 55, sp: 35, rp: 10 })[k]);
     const end = histYears(y - 60, y - 6), yrs = ri(15, 22);
     let line, pos;
-    if (kind === 'bat') { const h = ri(1850, 2950), hr = ri(140, 560); line = `通算${comma(h)}安打 ${hr}本塁打 打率${fmtAvg(rf(0.278, 0.322))}`; pos = pick(['C', '1B', '2B', '3B', 'SS', 'OF', 'OF']); }
-    else if (kind === 'sp') { line = `通算${ri(180, 330)}勝 防御率${rf(2.1, 3.1).toFixed(2)} ${comma(ri(1900, 3600))}奪三振`; pos = 'P'; }
-    else { line = `通算${ri(230, 400)}セーブ 防御率${rf(1.9, 2.8).toFixed(2)}`; pos = 'P'; }
-    out.push({ key: 'seed' + i, name: genJpName(), pos, team: ri(0, 11), from: end - yrs + 1, to: end, y: Math.min(y - 1, end + ri(5, 12)), pct: r1(rf(76, 97)), line, seed: true });
+    if (kind === 'bat') { const h = LG.mlb ? ri(2300, 3600) : ri(1850, 2950), hr = LG.mlb ? ri(180, 690) : ri(140, 560); line = `通算${comma(h)}安打 ${hr}本塁打 打率${fmtAvg(rf(0.278, 0.322))}`; pos = pick(['C', '1B', '2B', '3B', 'SS', 'OF', 'OF']); }
+    else if (kind === 'sp') { line = `通算${LG.mlb ? ri(210, 360) : ri(180, 330)}勝 防御率${rf(2.1, 3.1).toFixed(2)} ${comma(ri(1900, 3600))}奪三振`; pos = 'P'; }
+    else { line = `通算${LG.mlb ? ri(300, 600) : ri(230, 400)}セーブ 防御率${rf(1.9, 2.8).toFixed(2)}`; pos = 'P'; }
+    out.push({ key: 'seed' + i, name: genJpName(), pos, team: ri(0, G.teams.length - 1), from: end - yrs + 1, to: end, y: Math.min(y - 1, end + ri(5, 12)), pct: r1(rf(76, 97)), line, seed: true });
   }
   return out.sort((a, b) => a.y - b.y);
 }
@@ -184,7 +185,8 @@ function featCheck(res, g) {
     p.feats = (p.feats || []).concat([{ y: G.year, k: f.k }]);
     const user = isUser(f.tid);
     const t = `${tShort(f.tid)}の${p.name}が${tShort(opp)}戦で${F.n}を達成${f.k === 'k15' ? `（${f.v}奪三振）` : ''}`;
-    addNews('record', t, { important: F.big || user, tid: f.tid, note: user ? (F.big ? 'hi' : true) : false, pid: p.id, go: 'records', tab: 'feats' });
+    // メジャー版は30球団あるので、ほかの球団の小さな偉業はニュースにしない（偉業の記録には残る）
+    if (user || F.big || !LG.mlb) addNews('record', t, { important: F.big || user, tid: f.tid, note: user ? (F.big ? 'hi' : true) : false, pid: p.id, go: 'records', tab: 'feats' });
     p.pop = clamp(p.pop + (F.big ? 6 : 2), 0, 100);
     if (!user) continue;
     uT().pop = clamp(uT().pop + (F.big ? 1.5 : 0.5), 0, 99);
@@ -267,6 +269,8 @@ function farewellDone() {
 function legendKey(L) { return L.pid != null ? 'p' + L.pid : L.name + '_' + L.y; }
 function hofScore(L) {
   const c = L.c || {};
+  if (LG.mlb) return (L.war || 0) * 1.4 + (c.h >= 3000 ? 24 : c.h >= 2500 ? 9 : 0) + (c.hr >= 500 ? 24 : c.hr >= 400 ? 10 : c.hr >= 300 ? 3 : 0) + (c.w >= 300 ? 26 : c.w >= 250 ? 12 : c.w >= 200 ? 5 : 0) +
+    (c.sv >= 400 ? 18 : c.sv >= 300 ? 7 : 0) + (c.so >= 3000 ? 10 : 0) + (L.awards || 0) * 1.3 + (L.titles || 0) * 2 + (L.feats || 0) * 2;
   return (L.war || 0) * 1.6 + (c.h >= 2000 ? 18 : c.h >= 1500 ? 6 : 0) + (c.hr >= 500 ? 22 : c.hr >= 400 ? 14 : c.hr >= 300 ? 6 : 0) + (c.w >= 200 ? 22 : c.w >= 150 ? 8 : 0) +
     (c.sv >= 250 ? 16 : c.sv >= 150 ? 5 : 0) + (L.awards || 0) * 1.5 + (L.titles || 0) * 2 + (L.feats || 0) * 2;
 }
@@ -275,7 +279,7 @@ function hofVote() {
   const H = G.hof; const y = G.year;
   for (const L of G.legends) {
     const key = legendKey(L);
-    if (L.y > y - 3 || L.hofOut || H.members.some(m => m.key === key) || H.ballot.some(b => b.key === key)) continue;
+    if (L.y > y - (LG.hofWait || 3) || L.hofOut || H.members.some(m => m.key === key) || H.ballot.some(b => b.key === key)) continue;
     H.ballot.push({ key, L, yrs: 0, pct: 0 });
   }
   const res = [];
@@ -283,7 +287,7 @@ function hofVote() {
     b.yrs++;
     b.pct = r1(clamp((hofScore(b.L) - 30) * 1.3 + (b.yrs - 1) * 2.5 + rn(0, 3), 0, 99.5));
     if (b.pct >= 75) { H.ballot = H.ballot.filter(x => x !== b); hofInduct(b); res.push(b); }
-    else if (b.yrs >= 15 || b.pct < 5) { H.ballot = H.ballot.filter(x => x !== b); b.L.hofOut = true; }
+    else if (b.yrs >= (LG.hofYears || 15) || b.pct < 5) { H.ballot = H.ballot.filter(x => x !== b); b.L.hofOut = true; }
   }
   H.last = { y, res: res.map(b => ({ name: b.L.name, pct: b.pct })), top: H.ballot.slice().sort((a, b) => b.pct - a.pct).slice(0, 5).map(b => ({ name: b.L.name, pct: b.pct })) };
   if (!res.length) { if (H.ballot.length) addNews('record', `野球殿堂の投票結果：今年の殿堂入りはなし（最多は${H.last.top[0].name}の${H.last.top[0].pct}%）`, {}); return; }

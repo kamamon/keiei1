@@ -19,7 +19,7 @@ async function saveTo(slot) {
   try {
     const data = await packStr(serialize());
     localStorage.setItem(SAVE_KEY + slot, data);
-    localStorage.setItem(SAVE_KEY + slot + '_meta', JSON.stringify({ t: Date.now(), team: tName(G.user.tid), date: nowStr(), name: G.user.name, tid: G.user.tid }));
+    localStorage.setItem(SAVE_KEY + slot + '_meta', JSON.stringify({ t: Date.now(), team: tName(G.user.tid), date: nowStr(), name: G.user.name, tid: G.user.tid, mode: LG.mode }));
     return true;
   } catch (e) { return false; }
 }
@@ -42,9 +42,10 @@ SCREENS.title = () => {
   const tp = artPhoto('title'), ti = tp ? '' : ilScene('title');
   return `<div class="title${tp ? ' art-bg' : ti ? ' art-il' : ''}"${tp ? ` style="--art:url('${tp}')"` : ''}>${ti ? `<div class="title-il">${ti}</div>` : ''}<div class="title-board">
     <h1>球団社長</h1>
-    <p>プロ野球経営シミュレーション</p>
+    <p>${LG.sub}</p>
     <div class="lamps"><span><i class="dot b"></i>補強</span><span><i class="dot s"></i>育成</span><span><i class="dot o"></i>経営</span></div>
-    <p class="small" style="opacity:.75;max-width:44ch;margin:12px auto 0">予算・街づくり・ドラフト・FA・スタッフ・球場・ファンクラブ…。架空の12球団から1つを選び、球団のすべてを動かします。</p>
+    <div class="lgpick" role="group" aria-label="リーグを選ぶ">${[['npb', '日本のプロ野球', '12<wbr>球団・143<wbr>試合'], ['mlb', 'メジャーリーグ', '30<wbr>球団・162<wbr>試合']].map(([k, n, d]) => `<button class="${LG.mode === k ? 'on' : ''}" data-a="tMode" data-v="${k}" aria-pressed="${LG.mode === k}"><b>${n}</b><span>${d}</span></button>`).join('')}</div>
+    <p class="small" style="opacity:.75;max-width:46ch;margin:12px auto 0">${LG.mlb ? '162試合・地区制・12球団のポストシーズン。年俸調停、保有6年でFA、ぜいたく税、7月のドラフト。架空の30球団から1つを選び、球団のすべてを動かします。' : '予算・街づくり・ドラフト・FA・スタッフ・球場・ファンクラブ…。架空の12球団から1つを選び、球団のすべてを動かします。'}</p>
   </div>
   <div class="title-actions">
     <button class="btn pri" data-a="tNew">新しく始める</button>
@@ -55,22 +56,24 @@ SCREENS.title = () => {
   </div>`;
 };
 function titleLoad() {
-  const rows = ['auto', '1', '2', '3'].map(s => { const m = slotMeta(s); return `<div class="lot-row"><div style="flex:1"><b>${SLOT_NAMES[s]}</b><div class="small muted">${m ? `${esc(m.team)}　${esc(m.date)}　（保存 ${fmtTime(m.t)}）` : '空き'}</div></div>${m ? `<button class="btn pri sm" data-a="tLoad" data-s="${s}">読み込む</button>` : ''}</div>`; }).join('');
+  const rows = ['auto', '1', '2', '3'].map(s => { const m = slotMeta(s); return `<div class="lot-row"><div style="flex:1"><b>${SLOT_NAMES[s]}</b><div class="small muted">${m ? `${m.mode === 'mlb' ? '<span class="tag">メジャー</span> ' : ''}${esc(m.team)}　${esc(m.date)}　（保存 ${fmtTime(m.t)}）` : '空き'}</div></div>${m ? `<button class="btn pri sm" data-a="tLoad" data-s="${s}">読み込む</button>` : ''}</div>`; }).join('');
   return `<div class="title"><div style="width:100%;max-width:640px"><h1 class="h1">続きから</h1><div class="lot">${rows}</div><div class="row" style="margin-top:16px"><button class="btn" data-a="tBack">戻る</button></div></div></div>`;
 }
 function titleTeams() {
   const s = UI.title;
-  const cards = TEAM_DEFS.map((d, i) => {
+  const card = (d, i) => {
     const T = { color: d.color, color2: d.color2, kanji: d.kanji };
     return `<button class="tcard ${s.team === i ? 'on' : ''}" style="--c:${d.color}" data-a="tPick" data-v="${i}">
-      <div class="row">${emblem(T, 40)}<div><div class="nm">${d.city}${d.nick}</div><div class="small muted">${LEAGUES[d.league]}</div></div></div>
+      <div class="row">${emblem(T, 40)}<div><div class="nm">${d.city}${LG.mlb ? '・' : ''}${d.nick}</div>${LG.mlb ? '' : `<div class="small muted">${LEAGUES[d.league]}</div>`}</div></div>
       <div class="row sp small"><span>難易度 ${stars(d.star)}</span><span class="muted">市場規模 ${'●'.repeat(d.market)}${'○'.repeat(5 - d.market)}</span></div>
       <div class="small muted">${d.stadium}（${comma(d.cap)}人・${d.dome ? 'ドーム' : '屋外'}）</div>
-      <div class="small muted">親会社：${d.parent}　資金 ${fmtOku(d.cash)}</div>
+      <div class="small muted">${LG.mlb ? 'オーナー' : '親会社'}：${d.parent}　資金 ${fmtOku(d.cash)}</div>
     </button>`;
-  }).join('');
+  };
+  const cards = LG.mlb ? '' : TEAM_DEFS.map(card).join('');
+  const groups = LG.mlb ? [0, 1].map(lg => `<h2 class="tg-h">${LEAGUES[lg]}</h2>` + [0, 1, 2].map(dv => `<h3 class="tg-d">${LG.divs[dv]}</h3><div class="teamgrid t5">${TEAM_DEFS.map((d, i) => d.league === lg && d.div === dv ? card(d, i) : '').join('')}</div>`).join('')).join('') : '';
   return `<div class="main" style="max-width:1200px;margin:0 auto"><h1 class="h1">球団を選ぶ</h1><p class="lead">難易度が低いほど資金と人気があり、戦力も整っています。地方の小さな球団を強くするのも醍醐味です。</p>
-    <div class="teamgrid">${cards}<button class="tcard custom" data-a="tCustom"><div class="nm">カスタムスタート</div><div class="small muted">球団名・色・球場・資金・戦力・街の状態・オーナーの厳しさまで、自分で決めて始めます。${s.team != null ? `<br>選んでいる「${esc(TEAM_DEFS[s.team].city + TEAM_DEFS[s.team].nick)}」をひな形にします。` : ''}</div></button></div>
+    ${groups}<div class="teamgrid">${cards}<button class="tcard custom" data-a="tCustom"><div class="nm">カスタムスタート</div><div class="small muted">球団名・色・球場・資金・戦力・街の状態・オーナーの厳しさまで、自分で決めて始めます。${s.team != null ? `<br>選んでいる「${esc(TEAM_DEFS[s.team].city + TEAM_DEFS[s.team].nick)}」をひな形にします。` : ''}</div></button></div>
     <div class="row" style="margin-top:18px"><button class="btn" data-a="tBack">戻る</button><button class="btn pri" data-a="tNext" ${s.team == null ? 'disabled' : ''}>この球団で始める</button></div></div>`;
 }
 function titleSetup() {
@@ -94,11 +97,12 @@ ACT.tNick = el => { UI.title.nick = el.value; };
 ACT.tPol = el => { UI.title.policy = el.value; };
 ACT.tStart = () => {
   const s = UI.title;
-  newGame({ team: s.team, name: s.name.trim() || '球団社長', nick: s.nick.trim() || null, policy: s.policy });
+  newGame({ team: s.team, name: s.name.trim() || '球団社長', nick: s.nick.trim() || null, policy: s.policy, mode: LG.mode });
   try { G.user.theme = localStorage.getItem('kyudan_theme') || 'night'; } catch (e) { }
-  UI.screen = 'home'; UI.resetScroll = true; UI.title = { step: 0, team: null, name: '', nick: '', policy: 'balance' };
+  UI.screen = 'home'; UI.resetScroll = true; UI.title = { step: 0, team: null, name: '', nick: '', policy: 'balance', mode: LG.mode };
   render(); openModal('welcome'); autosave();
 };
+ACT.tMode = el => { setLeague(el.dataset.v); UI.title.mode = LG.mode; UI.title.team = null; UI.title.c = null; try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { } render(); };
 /* ---------- カスタムスタート ---------- */
 const CS_NICKS = [['グリフォンズ', '鷲'], ['ペガサス', '翼'], ['コメッツ', '彗'], ['オーシャンズ', '海'], ['ボルケーノズ', '炎'], ['ミーティアーズ', '星'],
   ['アルバトロス', '翔'], ['ブリザーズ', '雪'], ['サンライズ', '旭'], ['クラウンズ', '冠'], ['フォレスターズ', '森'], ['トルネーズ', '嵐']];
@@ -124,14 +128,14 @@ function csRandomize(c) {
   c.city = rp(PLACES[c.region]);
   const [nk, kj] = rp(CS_NICKS); c.nick = nk; c.kanji = kj;
   const [c1, c2] = rp(CS_COLORS); c.color = c1; c.color2 = c2;
-  c.parent = c.city + rp(['電鉄', 'フーズ', 'ガス', '信用金庫', '通信', '観光', 'ホールディングス', '製菓']);
-  c.stadium = c.dome ? c.city + 'ドーム' : c.city + rp(['スタジアム', 'ボールパーク', '市民球場', 'フィールド']);
+  c.parent = c.city + (LG.mlb ? rp(['・スポーツ', '・キャピタル', '・グループ', '・ホールディングス', '・パートナーズ']) : rp(['電鉄', 'フーズ', 'ガス', '信用金庫', '通信', '観光', 'ホールディングス', '製菓']));
+  c.stadium = c.dome ? c.city + (LG.mlb ? '・ドーム' : 'ドーム') : c.city + (LG.mlb ? rp(['・ボールパーク', '・フィールド', '・パーク']) : rp(['スタジアム', 'ボールパーク', '市民球場', 'フィールド']));
 }
 function csPlate(c) {
   const n = csNorm(c); const T = { color: n.color, color2: n.color2, kanji: n.kanji };
   const b = TEAM_DEFS[n.base]; const st = customStars(n);
-  return `<div class="cs-plate" style="--c:${n.color};--c2:${n.color2}">${emblem(T, 84)}<div class="nm">${esc(n.city || '（都市名）')}${esc(n.nick || '（愛称）')}</div>
-    <div class="sub">${LEAGUES[b.league]}　${esc(n.stadium)}</div></div>
+  return `<div class="cs-plate" style="--c:${n.color};--c2:${n.color2}">${emblem(T, 84)}<div class="nm">${esc(n.city || '（都市名）')}${LG.mlb ? '・' : ''}${esc(n.nick || '（愛称）')}</div>
+    <div class="sub">${LEAGUES[b.league]}${LG.mlb ? ' ' + LG.divs[b.div] : ''}　${esc(n.stadium)}</div></div>
     <div class="panel"><div class="panel-b"><dl class="kv">
       <dt>難易度の目安</dt><dd>${stars(st)}</dd>
       <dt>本拠地</dt><dd>${comma(n.cap)}人・${n.dome ? 'ドーム' : '屋外'}・${n.owned ? '自前' : '借りる'}</dd>
@@ -154,7 +158,7 @@ function titleCustom() {
   return `<div class="main" style="max-width:1120px;margin:0 auto"><h1 class="h1">カスタムスタート</h1>
     <p class="lead">選んだ球団の枠（リーグと日程）を使って、自分だけの球団を立ち上げます。決めた内容はプレートにすぐ反映されます。</p>
     <div class="cs"><div class="stack">
-    ${panel('球団', f('ひな形', `<select class="inp" data-c="csBase">${TEAM_DEFS.map((d, i) => opt(i, `${d.city}${d.nick}（${LEAGUES[d.league]}）`, c.base)).join('')}</select>`, 'この球団の枠を置き換えます。選び直すと名前や球場などの設定を読み込み直します。') +
+    ${panel('球団', f('ひな形', `<select class="inp" data-c="csBase">${TEAM_DEFS.map((d, i) => opt(i, `${d.city}${LG.mlb ? '・' : ''}${d.nick}（${LEAGUES[d.league]}${LG.mlb ? ' ' + LG.divs[d.div] : ''}）`, c.base)).join('')}</select>`, 'この球団の枠を置き換えます。選び直すと名前や球場などの設定を読み込み直します。') +
       f('都市名', txt('city', 8)) + f('愛称', txt('nick', 12)) + f('マークの文字', txt('kanji', 2, '4.5em'), '漢字1文字がおすすめです') +
       f('チームカラー', `<input type="color" value="${esc(c.color)}" data-i="csTxt" data-k="color" aria-label="メインカラー"><span class="small muted">メイン</span><input type="color" value="${esc(c.color2)}" data-i="csTxt" data-k="color2" aria-label="サブカラー"><span class="small muted">サブ</span>`) +
       f('親会社', txt('parent', 20)) +
@@ -190,9 +194,9 @@ ACT.csRandom = () => { csRandomize(UI.title.c); render(); };
 ACT.csStart = () => {
   const s = UI.title; const c = csNorm(s.c);
   if (!c.city || !c.nick) { toast('都市名と愛称を入れてください', 'bad'); return; }
-  newGame({ team: c.base, name: s.name.trim() || '球団社長', policy: s.policy, custom: c });
+  newGame({ team: c.base, name: s.name.trim() || '球団社長', policy: s.policy, custom: c, mode: LG.mode });
   try { G.user.theme = localStorage.getItem('kyudan_theme') || 'night'; } catch (e) { }
-  UI.screen = 'home'; UI.resetScroll = true; UI.title = { step: 0, team: null, name: '', nick: '', policy: 'balance' };
+  UI.screen = 'home'; UI.resetScroll = true; UI.title = { step: 0, team: null, name: '', nick: '', policy: 'balance', mode: LG.mode };
   render(); openModal('welcome'); autosave();
 };
 ACT.tLoad = async el => {
@@ -215,7 +219,7 @@ MODALS.welcome = () => {
     <ol class="small" style="padding-left:1.2em;margin:10px 0">
       <li>ホームの「やること」から、予算・中期計画・キャンプを決めます。</li>
       <li>右上の<b>「次の週へ」</b>で1週間ずつ進みます。▾ からまとめて進めることもできます。</li>
-      <li>3月末に開幕。ドラフトは10月、FAは11月、契約更改は12月です。</li>
+      <li>${LG.mlb ? '3月末に開幕して162試合。ドラフトは7月、ポストシーズンは10月、FAは11月、年俸調停は12月です。' : '3月末に開幕。ドラフトは10月、FAは11月、契約更改は12月です。'}</li>
       <li>年末にオーナーが1年を評価します。信頼がなくなると解任です。</li>
       <li>右上のベルには、工事の完了や選手の成長・故障など、何かが完了したり変わったりしたときのお知らせが届きます。</li>
     </ol><p class="small muted">進行は毎週ブラウザに自動保存されます。</p>`,
@@ -241,10 +245,11 @@ function afterAdvance(rep, quiet, since, weeks) {
   else {
     const T = uT();
     if (G.post && G.post.champ === T.id && G.flags.celGs !== G.year) { G.flags.celGs = G.year; openModal('cele', { k: 'gs' }); }
-    else if (G.post && curTurn() === 36 && G.post.lgChamp && G.post.lgChamp.includes(T.id) && G.flags.celLg !== G.year) { G.flags.celLg = G.year; openModal('cele', { k: 'lg' }); }
+    else if (G.post && curTurn() === (LG.mlb ? 39 : 36) && G.post.lgChamp && G.post.lgChamp.includes(T.id) && G.flags.celLg !== G.year) { G.flags.celLg = G.year; openModal('cele', { k: 'lg' }); }
+    else if (LG.mlb && G.post && curTurn() === 36 && G.post.divChamp && G.post.divChamp.includes(T.id) && G.flags.celDiv !== G.year) { G.flags.celDiv = G.year; openModal('cele', { k: 'div' }); }
     if (curTurn() === 0 && G.owner.review && !G.owner.review.seen) openModal('review');
     if (curTurn() === SEASON_START && G.flags.openY !== G.year) { G.flags.openY = G.year; openModal('scene', { k: 'open' }); }
-    if (curTurn() === 39 && G.flags.draftY !== G.year) { G.flags.draftY = G.year; openModal('scene', { k: 'draft' }); }
+    if (curTurn() === LG.draftT && G.flags.draftY !== G.year) { G.flags.draftY = G.year; openModal('scene', { k: 'draft' }); }
     const sl = (G.town.stageLog || []); if (sl.length && (G.flags.stageSeen || 0) < sl.length) { G.flags.stageSeen = sl.length; openModal('scene', { k: 'stage' }); }
     for (const it of cq.slice(quiet ? -2 : -4)) openModal('cele2', it);
     const weekly = !quiet && rep && G.user.showWeekly && (rep.games.length || rep.exh || rep.news.length || fresh.length);
@@ -277,7 +282,7 @@ ACT.stopAhead = () => { aheadStop = true; };
 ACT.ahead = el => {
   const m = el.dataset.m; closeAllModals(); renderModalRoot();
   const startT = curTurn(), startY = G.year; let n = 0; const ut = G.user.tid; const r0 = { w: uT().rec.w, l: uT().rec.l }; const seq0 = G.noteSeq || 0;
-  const keyTurns = [0, 4, 11, 36, 39, 40, 44];
+  const keyTurns = LG.mlb ? [0, 4, 11, LG.draftT, 36, 40, 44] : [0, 4, 11, 36, 39, 40, 44];
   aheadStop = false; UI.busy = true; render();
   const step = () => {
     let stop = aheadStop || G.gameOver || blockingTasks().length > 0;
@@ -311,7 +316,7 @@ MODALS.weekly = () => {
   const ns = (r.notes || []).map(id => (G.notes || []).find(n => n.id === id)).filter(Boolean);
   if (ns.length) body += panel(`お知らせ ${ns.length}件`, notesList(ns, ns.map(n => n.id)), { flush: true, cls: 'hl' }) + '<div style="height:12px"></div>';
   if (games.length) {
-    body += `<div class="row sp" style="margin-bottom:8px"><div><span class="stat-big">${r.w}勝${r.l}敗${r.d ? r.d + '分' : ''}</span> <span class="muted">今週</span></div><div class="muted">${G.post && curTurn() >= 36 ? '' : `${LEAGUES[T.league]} ${teamRank(ut)}位　${T.rec.w}勝${T.rec.l}敗${T.rec.d ? T.rec.d + '分' : ''}`}</div></div>`;
+    body += `<div class="row sp" style="margin-bottom:8px"><div><span class="stat-big">${r.w}勝${r.l}敗${r.d ? r.d + '分' : ''}</span> <span class="muted">今週</span></div><div class="muted">${G.post && curTurn() >= 36 ? '' : `${grpName(grpOf(T))} ${teamRank(ut)}位　${T.rec.w}勝${T.rec.l}敗${T.rec.d ? T.rec.d + '分' : ''}`}</div></div>`;
     body += `<div class="panel">${games.map(miniGame).join('')}</div>`;
   }
   if (r.exh) body += panel('オープン戦', r.exh.map(x => `<div class="row sp small"><span>${x.home ? 'vs' : '@'} ${tMark(x.opp)}</span><span class="num">${x.my}-${x.op} ${x.my > x.op ? '<span class="pos">勝</span>' : x.my < x.op ? '<span class="neg">敗</span>' : '分'}</span></div>`).join(''));
@@ -361,13 +366,14 @@ SCREENS.home = () => {
   const taskHtml = tasks.length ? `<ul class="tasks">${tasks.map(x => `<li><span>${x.urgent ? '<span class="dot o"></span> ' : '<span class="dot s"></span> '}${esc(x.t)}</span><button class="btn sm" data-a="${x.go === 'event' ? 'openEvent' : 'go'}" data-v="${x.go}" ${x.tab ? `data-tab="${x.tab}"` : ''}>開く</button></li>`).join('')}</ul>` : '<div class="empty">いま急ぎの用事はありません。「次の週へ」で進めましょう。</div>';
   const recent = G.boxOrder.slice(-6).reverse().map(id => G.boxes[id]).filter(Boolean);
   const recentHtml = recent.length ? recent.map(miniGame).join('') : `<div class="empty">${t < SEASON_START ? `開幕は3月第4週です（あと${SEASON_START - t}週）` : 'まだ試合がありません'}</div>`;
-  const st = standings(T.league);
+  const st = grpTable(grpOf(T));
   const stHtml = table('home-st', [
     { k: 'r', l: '', h: x => x.rank, num: true },
     { k: 't', l: '球団', h: x => tMark(x.t.id) },
-    { k: 'w', l: '勝', h: x => x.t.rec.w, num: true }, { k: 'l', l: '敗', h: x => x.t.rec.l, num: true }, { k: 'd', l: '分', h: x => x.t.rec.d, num: true },
+    { k: 'w', l: '勝', h: x => x.t.rec.w, num: true }, { k: 'l', l: '敗', h: x => x.t.rec.l, num: true }].concat(LG.mlb ? [] : [{ k: 'd', l: '分', h: x => x.t.rec.d, num: true }], [
     { k: 'p', l: '勝率', h: x => fmtAvg(pctOf(x.t.rec)), num: true }, { k: 'g', l: '差', h: x => x.rank === 1 ? '―' : x.gb.toFixed(1), num: true }
-  ], st, { rowCls: x => x.t.id === ut ? 'me' : '', compact: true });
+  ]), st, { rowCls: x => x.t.id === ut ? 'me' : '', compact: true });
+  const wcHtml = LG.mlb && t >= SEASON_START && t <= MAKEUP_TURN ? wcMini(T.league) : '';
   const pw = teamPower(ut);
   const F = G.fin; const ytdNet = opNet();
   const week = thisWeekGames();
@@ -381,7 +387,8 @@ SCREENS.home = () => {
       ${panel('ニュース', `<ul class="news">${G.news.slice(0, 10).map(newsLi).join('')}</ul>`, { flush: true, act: '<button class="btn sm" data-a="go" data-v="news">すべて</button>' })}
     </div>
     <div class="stack">
-      ${panel(LEAGUES[T.league] + ' 順位', stHtml, { flush: true, act: '<button class="btn sm" data-a="go" data-v="standings">順位表</button>' })}
+      ${panel(grpName(grpOf(T)) + ' 順位', stHtml, { flush: true, act: '<button class="btn sm" data-a="go" data-v="standings">順位表</button>' })}
+      ${wcHtml ? panel('ワイルドカード争い', wcHtml, { flush: true }) : ''}
       ${panel('チーム状況', `<dl class="kv">
         <dt>得点 / 失点</dt><dd>${R.rs} / ${R.ra}（${R.rs - R.ra >= 0 ? '+' : ''}${R.rs - R.ra}）</dd>
         <dt>連勝・連敗</dt><dd>${R.strk > 0 ? R.strk + '連勝' : R.strk < 0 ? (-R.strk) + '連敗' : '―'}</dd>
@@ -424,6 +431,16 @@ function recWatchHtml() {
 }
 function homeLead() {
   const t = curTurn();
+  if (LG.mlb) {
+    if (t <= 3) return '新しいシーズンの準備期間です。予算、中期計画、スプリングトレーニングを決めましょう。';
+    if (t <= 7) return 'スプリングトレーニングで選手を鍛えています。オープン戦は3月から。';
+    if (t <= 10) return 'オープン戦で開幕に向けた最終調整中。26人のメジャー登録とオーダーを確認しましょう。';
+    if (t === LG.draftT) return 'オールスターとドラフトの週です。指名する選手を決めましょう。';
+    if (t <= MAKEUP_TURN) return '毎週6〜7試合を戦います。トレードの期限は7月末。地区優勝かワイルドカードで、ポストシーズンを目指しましょう。';
+    if (t <= 39) return '12球団によるポストシーズン。ワールドシリーズで頂点を争います。';
+    if (t <= 43) return 'FA市場が開いています。保有6年を過ぎた選手はみなFAです。来季に向けた編成を進めましょう。';
+    return '契約の季節です。年俸調停の選手と12月第4週までに合意しましょう。合意できなければ調停の公聴会で決まります。';
+  }
   if (t <= 3) return '新しいシーズンの準備期間です。予算、中期計画、春季キャンプを決めましょう。';
   if (t <= 7) return 'キャンプで選手を鍛えています。オープン戦は3月から。';
   if (t <= 10) return 'オープン戦で開幕に向けた最終調整中。1軍の顔ぶれとオーダーを確認しましょう。';
@@ -435,8 +452,8 @@ function homeLead() {
 }
 function thisWeekGames() {
   const t = curTurn(); if (t < SEASON_START || t > SEASON_END) return '';
-  const ut = G.user.tid; const w = t - SEASON_START; const out = [];
-  for (let i = 0; i < 6; i++) { const d = w * 6 + i; const day = G.sched.days[d]; if (!day) continue; const g = day.find(x => x.h === ut || x.a === ut); if (g) out.push(`<div class="row sp" style="padding:6px 14px;border-bottom:1px solid var(--line)"><span class="small muted">${DOW[d % 6]}</span><span style="flex:1;margin-left:10px">${g.h === ut ? 'vs' : '@'} ${tMark(g.h === ut ? g.a : g.h)}</span><span class="small muted">${g.h === ut ? esc(stadiumName()) : esc(stadiumNameOf(g.h))}</span></div>`); }
+  const ut = G.user.tid; const w = t - SEASON_START; const out = []; const n = LG.dpw || 6;
+  for (let i = 0; i < n; i++) { const d = w * n + i; const day = G.sched.days[d]; if (!day) continue; const g = day.find(x => x.h === ut || x.a === ut); if (g) out.push(`<div class="row sp" style="padding:6px 14px;border-bottom:1px solid var(--line)"><span class="small muted">${DOW[d % DOW.length]}</span><span style="flex:1;margin-left:10px">${g.h === ut ? 'vs' : '@'} ${tMark(g.h === ut ? g.a : g.h)}</span><span class="small muted">${g.h === ut ? esc(stadiumName()) : esc(stadiumNameOf(g.h))}</span></div>`); }
   return out.join('');
 }
 function homeLeaders() {
@@ -450,9 +467,9 @@ function homeLeaders() {
 /* 大きな節目のカットイン */
 MODALS.scene = ({ k }) => {
   const T = uT();
-  if (k === 'open') return { title: '開幕', size: 'narrow', body: `${art('season', { h: 'cut', kicker: `${G.year}年 3月`, title: 'ペナントレース開幕', sub: `${esc(tName(T.id))}の${G.year}年シーズンが始まります`, eager: true })}<p>143試合の戦いが始まります。毎週6試合。故障者の入れ替えと、7月末までの補強を忘れずに。</p><p class="small muted">去年の順位：${T.lastRank ? T.lastRank + '位' : '―'}　オーナーの期待：${expectedRank()}位前後</p>`,
+  if (k === 'open') return { title: '開幕', size: 'narrow', body: `${art('season', { h: 'cut', kicker: `${G.year}年 3月`, title: LG.mlb ? 'レギュラーシーズン開幕' : 'ペナントレース開幕', sub: `${esc(tName(T.id))}の${G.year}年シーズンが始まります`, eager: true })}<p>${LG.mlb ? '162試合の戦いが始まります。毎週6〜7試合。地区優勝か、ワイルドカード3枠でポストシーズンへ。トレードの期限は7月末です。' : '143試合の戦いが始まります。毎週6試合。故障者の入れ替えと、7月末までの補強を忘れずに。'}</p><p class="small muted">去年の順位：${rankStr(T.lastRank)}　オーナーの期待：${LG.mlb ? '地区' : ''}${expectedRank()}位前後</p>`,
     foot: '<button class="btn" data-a="closeModal">閉じる</button><button class="btn pri" data-a="go" data-v="lineup">オーダーを確認する</button>' };
-  if (k === 'draft') return { title: 'ドラフト会議', size: 'narrow', body: `${art('draft', { h: 'cut', kicker: `${G.year}年 10月`, title: '運命のドラフト会議', sub: '1位は12球団が一斉に入札。重なれば抽選です', eager: true })}<p>スカウトが追いかけてきた有望株を指名する日です。</p>`,
+  if (k === 'draft') return { title: 'ドラフト会議', size: 'narrow', body: LG.mlb ? `${art('draft', { h: 'cut', kicker: `${G.year}年 7月`, title: 'ドラフト', sub: `指名順は前の年の成績の逆順（上位6つは抽選）。${LG.draftRounds}巡目まで`, eager: true })}<p>スカウトが追いかけてきた高校・大学の有望株を指名する日です。指名した選手はすぐマイナー契約で入団します。</p>` : `${art('draft', { h: 'cut', kicker: `${G.year}年 10月`, title: '運命のドラフト会議', sub: '1位は12球団が一斉に入札。重なれば抽選です', eager: true })}<p>スカウトが追いかけてきた有望株を指名する日です。</p>`,
     foot: '<button class="btn" data-a="closeModal">あとで</button><button class="btn pri" data-a="go" data-v="draft">ドラフト会議へ</button>' };
   if (k === 'stage') { const s = townStage(); const L = G.town.stageLog[G.town.stageLog.length - 1]; const n = TOWN_STAGES[L.i - 1][1];
     return { title: '街が発展しました', size: 'narrow', body: `${art(townArt(L.i), { h: 'cut', kicker: `街の段階 ${L.i}／${TOWN_STAGES.length}`, title: n, eager: true })}<p>球場のまわりが「${n}」になりました。地域の愛着と人気が少し上がっています。</p>${s.next != null ? `<p class="small muted">次の「${s.nextN}」まで、いつもの賑わいがあと${Math.max(1, s.next - Math.floor(s.v))}です。</p>` : '<p class="small muted">これが最後の段階です。</p>'}`,
@@ -468,12 +485,19 @@ MODALS.cele2 = it => {
     foot: `${p ? `<button class="btn" data-a="player" data-id="${p.id}">選手を見る</button>` : ''}<button class="btn pri" data-a="closeModal">閉じる</button>` };
 };
 MODALS.cele = ({ k }) => {
-  const T = uT(); const gs = k === 'gs'; const y = gs ? G.year : G.year;
-  const R = T.rec; const s = gs ? G.post.series.find(x => x.kind === 'gs') : null;
+  const T = uT(); const gs = k === 'gs'; const y = G.year;
+  const R = T.rec; const s = gs ? G.post.series.find(x => x.kind === (LG.mlb ? 'ws' : 'gs')) : null;
+  if (k === 'div') return { title: '地区優勝！', size: 'narrow', body: `${art('post', { h: 'cut', eager: true })}<div class="title-board" style="padding:26px 18px;box-shadow:none">${emblem(T, 84)}<h1 style="font-size:40px;margin-top:10px">地区優勝</h1><p>${esc(tName(T.id))}　${y}年　${esc(grpName(grpOf(T)))}</p><p class="small">${R.w}勝${R.l}敗</p></div><p class="small muted" style="margin-top:12px">ポストシーズンでワールドシリーズ制覇を目指します。</p>`, foot: '<button class="btn pri" data-a="closeModal">閉じる</button>' };
   const mvp = gs && G.post.mvp != null ? P_(G.post.mvp) : null;
   return { title: gs ? '日本一！' : 'リーグ優勝！', size: 'narrow',
-    body: `${art(gs ? 'champ' : 'post', { h: 'cut', eager: true })}<div class="title-board" style="padding:26px 18px;box-shadow:none">${emblem(T, 84)}<h1 style="font-size:46px;margin-top:10px">${gs ? '日本一' : '優勝'}</h1><p>${esc(tName(T.id))}　${y}年${gs ? '' : '　' + LEAGUES[T.league]}</p>
-      <p class="small">${gs && s ? `グランドシリーズ ${s.winner === s.hi ? s.w[0] + '勝' + s.w[1] + '敗' : s.w[1] + '勝' + s.w[0] + '敗'}` : `${R.w}勝${R.l}敗${R.d ? R.d + '分' : ''}`}${mvp ? '　シリーズMVP ' + esc(mvp.name) : ''}</p></div>
-      <p class="small muted" style="margin-top:12px">${gs ? '優勝記念グッズが飛ぶように売れています。オーナーもきっと喜んでいるはずです。' : 'このあとプレーオフで日本一を目指します。'}</p>`,
+    body: `${art(gs ? 'champ' : 'post', { h: 'cut', eager: true })}<div class="title-board" style="padding:26px 18px;box-shadow:none">${emblem(T, 84)}<h1 style="font-size:${LG.mlb && gs ? 34 : 46}px;margin-top:10px">${gs ? LG.champ : LG.mlb ? 'リーグ優勝' : '優勝'}</h1><p>${esc(tName(T.id))}　${y}年${gs ? '' : '　' + LEAGUES[T.league]}</p>
+      <p class="small">${gs && s ? `${LG.series} ${s.winner === s.hi ? s.w[0] + '勝' + s.w[1] + '敗' : s.w[1] + '勝' + s.w[0] + '敗'}` : `${R.w}勝${R.l}敗${R.d ? R.d + '分' : ''}`}${mvp ? '　シリーズMVP ' + esc(mvp.name) : ''}</p></div>
+      <p class="small muted" style="margin-top:12px">${gs ? '優勝記念グッズが飛ぶように売れています。オーナーもきっと喜んでいるはずです。' : LG.mlb ? 'このあとワールドシリーズで頂点を目指します。' : 'このあとプレーオフで日本一を目指します。'}</p>`,
     foot: '<button class="btn pri" data-a="closeModal">閉じる</button>' };
 };
+
+/* ワイルドカード争い（メジャー版のホーム） */
+function wcMini(lg) {
+  const ut = G.user.tid; const w = wildCard(lg).slice(0, 6);
+  return `<table class="t compact"><tbody>${w.map(x => `<tr class="${x.t.id === ut ? 'me' : ''}${x.rank === 3 ? ' wc-cut' : ''}"><td class="num">${x.rank}</td><td>${tMark(x.t.id)}</td><td class="num">${x.t.rec.w}-${x.t.rec.l}</td><td class="num">${x.rank <= 3 ? (x.rank === 3 ? '―' : '+' + (-x.gb).toFixed(1)) : x.gb.toFixed(1)}</td></tr>`).join('')}</tbody></table>`;
+}

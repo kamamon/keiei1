@@ -144,7 +144,7 @@ function battingOrder(list) {
 function autoRoles(tid) {
   const ps = rosterLv(tid, 1).filter(p => isP(p) && p.injW === 0);
   const spScore = p => spOvr(p) + (p.pt === 'SP' ? 5 : -3) + (p.a.sta - 55) * 0.12;
-  const sp = ps.filter(p => p.a.sta >= 38).sort((a, b) => spScore(b) - spScore(a)).slice(0, 6);
+  const sp = ps.filter(p => p.a.sta >= 38).sort((a, b) => spScore(b) - spScore(a)).slice(0, LG.rot || 6);
   const rest = ps.filter(p => !sp.includes(p)).sort((a, b) => rpOvr(b) - rpOvr(a));
   return { rot: sp.map(p => p.id), cl: rest[0] ? rest[0].id : null, su: rest.slice(1, 3).map(p => p.id), mr: rest.slice(3).map(p => p.id) };
 }
@@ -158,9 +158,10 @@ function computeRoles(tid) {
   if (!isUser(tid) || G.user.lineupMode !== 'manual') return auto;
   const ok = id => { const p = P_(id); return p && p.team === tid && p.lv === 1 && isP(p) && p.injW === 0; };
   const m = G.user.manual;
-  const rot = (m.rot || []).filter(ok).slice(0, 6);
-  for (const id of auto.rot) if (rot.length < 6 && !rot.includes(id)) rot.push(id);
-  for (const id of auto.su.concat(auto.mr, auto.cl != null ? [auto.cl] : [])) if (rot.length < 5 && !rot.includes(id)) rot.push(id);
+  const nr = LG.rot || 6;
+  const rot = (m.rot || []).filter(ok).slice(0, nr);
+  for (const id of auto.rot) if (rot.length < nr && !rot.includes(id)) rot.push(id);
+  for (const id of auto.su.concat(auto.mr, auto.cl != null ? [auto.cl] : [])) if (rot.length < nr - 1 && !rot.includes(id)) rot.push(id);
   const usedR = new Set(rot);
   let cl = ok(m.cl) && !usedR.has(m.cl) ? m.cl : null;
   const su = (m.su || []).filter(id => ok(id) && !usedR.has(id) && id !== cl).slice(0, 2);
@@ -216,9 +217,9 @@ function autoRoster(tid) {
   const add = p => { pick1.add(p.id); if (p.frn) frn++; };
   const pits = healthy.filter(isP);
   const sps = pits.filter(p => p.a.sta >= 38).sort((a, b) => (spOvr(b) + (b.pt === 'SP' ? 5 : 0)) - (spOvr(a) + (a.pt === 'SP' ? 5 : 0)));
-  let nsp = 0; for (const p of sps) { if (nsp >= 6) break; if (canAdd(p)) { add(p); nsp++; } }
+  let nsp = 0; for (const p of sps) { if (nsp >= (LG.rot || 6)) break; if (canAdd(p)) { add(p); nsp++; } }
   const rps = pits.filter(p => !pick1.has(p.id)).sort((a, b) => rpOvr(b) - rpOvr(a));
-  let nrp = 0; for (const p of rps) { if (nrp >= 8) break; if (canAdd(p)) { add(p); nrp++; } }
+  let nrp = 0; for (const p of rps) { if (nrp >= (LG.nrp || 8)) break; if (canAdd(p)) { add(p); nrp++; } }
   const bats = healthy.filter(p => !isP(p));
   const cs = bats.filter(p => p.pos === 'C').sort((a, b) => batOvr(b.a, 'C') - batOvr(a.a, 'C'));
   let nc = 0; for (const p of cs) { if (nc >= 2) break; if (canAdd(p)) { add(p); nc++; } }
@@ -229,7 +230,7 @@ function autoRoster(tid) {
   const ofs = bats.filter(p => p.pos === 'OF' && !pick1.has(p.id)).sort((a, b) => batOvr(b.a, 'OF') - batOvr(a.a, 'OF'));
   let nof = 0; for (const p of ofs) { if (nof >= 4) break; if (canAdd(p)) { add(p); nof++; } }
   const restB = bats.filter(p => !pick1.has(p.id)).sort((a, b) => ovr(b) - ovr(a));
-  for (const p of restB) { if (pick1.size >= LIM.first - 0) break; if (pick1.size - nsp - nrp >= 15) break; if (canAdd(p)) add(p); }
+  for (const p of restB) { if (pick1.size >= LIM.first - 0) break; if (pick1.size - nsp - nrp >= (LG.nbat || 15)) break; if (canAdd(p)) add(p); }
   const restAll = healthy.filter(p => !pick1.has(p.id)).sort((a, b) => ovr(b) - ovr(a));
   for (const p of restAll) { if (pick1.size >= LIM.first) break; if (canAdd(p)) add(p); }
   for (const p of all) p.lv = pick1.has(p.id) ? 1 : 2;

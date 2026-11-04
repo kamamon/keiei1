@@ -16,9 +16,17 @@ for (const f of imgs) {
   art[f.replace(/\.[^.]+$/, '')] = 'img/' + f + '?v=' + crypto.createHash('sha1').update(buf).digest('hex').slice(0, 8);
   if (path.resolve(outDir) !== path.resolve(__dirname)) { fs.mkdirSync(path.join(outDir, 'img'), { recursive: true }); fs.copyFileSync(path.join(imgDir, f), path.join(outDir, 'img', f)); }
 }
-let html = read(path.join(src, 'template.html'));
-const head = 'const ART_FILES = ' + JSON.stringify(art) + ';\n';
-html = html.replace('/*__CSS__*/', () => css).replace('/*__JS__*/', () => (head + js).replace(/<\/script/gi, '<\\/script'));
+const tpl = read(path.join(src, 'template.html'));
 fs.mkdirSync(outDir, { recursive: true });
-fs.writeFileSync(out, html);
-console.log(path.relative(__dirname, out), (html.length / 1024).toFixed(0) + 'KB', '画像', imgs.length + '枚');
+/* 日本版（index.html）と、メジャー版から始まる mlb.html を作る（中身は同じで、最初に選ばれているリーグだけ違う） */
+function emit(file, mlb) {
+  let html = tpl;
+  const head = 'const ART_FILES = ' + JSON.stringify(art) + ';\n' + (mlb ? "const START_LEAGUE = 'mlb';\n" : '');
+  if (mlb) html = html.replace('<title>球団社長 プロ野球経営シミュレーション</title>', '<title>球団社長 メジャーリーグ経営シミュレーション</title>')
+    .replace(/<meta name="description" content="[^"]*">/, '<meta name="description" content="162試合・地区制・年俸調停・FA・ぜいたく税・ドラフトまで、メジャーリーグ球団のすべてを動かす経営シミュレーションゲーム">');
+  html = html.replace('/*__CSS__*/', () => css).replace('/*__JS__*/', () => (head + js).replace(/<\/script/gi, '<\\/script'));
+  fs.writeFileSync(file, html);
+  console.log(path.relative(__dirname, file), (html.length / 1024).toFixed(0) + 'KB', '画像', imgs.length + '枚');
+}
+emit(out, false);
+emit(path.join(outDir, 'mlb.html'), true);

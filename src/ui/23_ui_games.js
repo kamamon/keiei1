@@ -25,7 +25,7 @@ SCREENS.schedule = () => {
     }).join('');
     return panel(m + '月', `<div class="tw"><table class="t compact"><thead><tr><th>日付</th><th>対戦</th><th>球場</th><th>結果</th><th class="num">観客</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`, { flush: true });
   }).join('');
-  return `<h1 class="h1">日程・結果</h1><p class="lead">公式戦143試合。ホーム${home.length}試合の観客は合計${fmtPeople(att)}（平均${home.length ? comma(att / home.length) : 0}人）。</p>
+  return `<h1 class="h1">日程・結果</h1><p class="lead">公式戦${LG.games}試合。ホーム${home.length}試合の観客は合計${fmtPeople(att)}（平均${home.length ? comma(att / home.length) : 0}人）。</p>
   ${tabs('sched', [['mine', '自球団の日程'], ['league', 'リーグ全体の結果']], tab)}<div class="stack">${html}</div>`;
 };
 function scheduleLeague() {
@@ -35,7 +35,7 @@ function scheduleLeague() {
   const rows = day.map(g => `<tr><td>${tMark(g.a)}</td><td class="num">${g.done && !g.rain ? g.as : ''}</td><td class="center">-</td><td class="num">${g.done && !g.rain ? g.hs : ''}</td><td>${tMark(g.h)}</td><td class="small muted">${g.rain ? '雨天中止' : g.done ? '' : '試合前'}</td><td class="num small">${g.att ? comma(g.att) + '人' : ''}</td></tr>`).join('');
   return `<h1 class="h1">日程・結果</h1>${tabs('sched', [['mine', '自球団の日程'], ['league', 'リーグ全体の結果']], 'league')}
   <div class="row" style="margin-bottom:10px"><button class="btn sm" data-a="lgDay" data-v="${sel - 1}" ${sel <= 0 ? 'disabled' : ''}>前の日</button><b>${dayLabel(sel)}</b><button class="btn sm" data-a="lgDay" data-v="${sel + 1}" ${sel >= G.sched.days.length - 1 ? 'disabled' : ''}>次の日</button></div>
-  ${panel('', `<table class="t"><thead><tr><th>ビジター</th><th></th><th></th><th></th><th>ホーム</th><th></th><th class="num">観客</th></tr></thead><tbody>${rows}</tbody></table>`, { flush: true })}`;
+  ${panel('', rows ? `<table class="t"><thead><tr><th>ビジター</th><th></th><th></th><th></th><th>ホーム</th><th></th><th class="num">観客</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="empty">この日は試合がありません（移動日・オールスター休み）</div>', { flush: true })}`;
 }
 ACT.lgDay = el => { UI.f.leagueDay = clamp(+el.dataset.v, 0, G.sched.days.length - 1); render(); };
 
@@ -66,6 +66,7 @@ MODALS.box = ({ id }) => {
 /* ---------- 順位表 ---------- */
 SCREENS.standings = () => {
   const ut = G.user.tid;
+  if (LG.mlb) return standingsMLB();
   const one = lg => {
     const st = standings(lg);
     return panel(LEAGUES[lg], table('st' + lg, [
@@ -89,6 +90,7 @@ SCREENS.standings = () => {
   ${panel('対戦成績（' + esc(tShort(ut)) + '）', `<table class="t compact"><tbody>${vs}</tbody></table>`)}</div>`;
 };
 function postBracket() {
+  if (LG.mlb) return postBracketMLB();
   const P = G.post; const ser = k => P.series.filter(s => s.kind === k);
   const sline = s => { if (!s) return ''; const st = s.winner == null ? (s.games.length ? '進行中' : '予定') : '勝ち抜け：' + esc(tShort(s.winner)); return `<div class="lot-row ${s.winner != null && (isUser(s.winner)) ? 'win' : ''}"><div style="flex:1">${tMark(s.hi)} <span class="num">${s.w[0]}</span> - <span class="num">${s.w[1]}</span> ${tMark(s.lo)}${s.d ? ` <span class="small muted">${s.d}分</span>` : ''}</div><span class="small muted">${st}</span>${s.games.length ? s.games.map(g => g.id != null && G.boxes[g.id] ? `<button class="btn xs" data-a="box" data-id="${g.id}">${g.as}-${g.hs}</button>` : '').join('') : ''}</div>`; };
   return panel('ポストシーズン', `<div class="grid g3">
@@ -159,11 +161,51 @@ function awardsView() {
     const cols = [0, 1].map(lg => {
       const A = s.awards ? s.awards[lg] : null; const T = s.titles ? s.titles[lg] : null;
       let h = `<h4 style="margin:0 0 6px">${LEAGUES[lg]}</h4><table class="t compact"><tbody>`;
-      if (A) { h += `<tr><td>MVP</td><td>${A.mvp != null ? nm(s, A.mvp) : '―'}</td></tr><tr><td>新人王</td><td>${A.roy != null ? nm(s, A.roy) : '該当なし'}</td></tr><tr><td>ゴールデンアーム賞</td><td>${A.ace != null ? nm(s, A.ace) : '―'}</td></tr>`; }
+      if (A) { h += `<tr><td>MVP</td><td>${A.mvp != null ? nm(s, A.mvp) : '―'}</td></tr><tr><td>新人王</td><td>${A.roy != null ? nm(s, A.roy) : '該当なし'}</td></tr><tr><td>${LG.aceAward}</td><td>${A.ace != null ? nm(s, A.ace) : '―'}</td></tr>`; }
       if (T) for (const k in T) h += `<tr><td>${esc(T[k].n)}</td><td>${T[k].ids.map(id => nm(s, id)).join('、')} <span class="num faint">${STAT_DEFS[k] && STAT_DEFS[k].fmt ? STAT_DEFS[k].fmt(T[k].v) : T[k].v}</span></td></tr>`;
       if (A) { h += `<tr><td>ベストナイン</td><td class="small">${Object.entries(A.b9).map(([k, v]) => `${POS_S[k] || k}:${[].concat(v).map(id => nm(s, id)).join('・')}`).join('　')}</td></tr>`; }
       return h + '</tbody></table>';
     }).join('');
     return panel(`${s.y}年`, `<div class="grid g2">${cols}</div>`) + '<div style="height:14px"></div>';
   }).join('');
+}
+
+/* ---------- メジャー版の順位表：地区ごと＋ワイルドカード ---------- */
+function standingsMLB() {
+  const ut = G.user.tid; const T = uT();
+  const cols = (id, wc) => [
+    { k: 'r', l: wc ? 'WC' : '順位', h: x => x.rank, num: true },
+    { k: 't', l: '球団', h: x => tMark(x.t.id, true) },
+    { k: 'w', l: '勝', h: x => x.t.rec.w, num: true }, { k: 'l', l: '敗', h: x => x.t.rec.l, num: true },
+    { k: 'p', l: '勝率', h: x => fmtAvg(pctOf(x.t.rec)), num: true },
+    { k: 'gb', l: '差', h: x => wc ? (x.rank < 3 ? '+' + (-x.gb).toFixed(1) : x.rank === 3 ? '―' : x.gb.toFixed(1)) : x.rank === 1 ? '―' : x.gb.toFixed(1), num: true },
+    { k: 'rs', l: '得点', h: x => x.t.rec.rs, num: true }, { k: 'ra', l: '失点', h: x => x.t.rec.ra, num: true },
+    { k: 'hm', l: 'ホーム', h: x => `${x.t.rec.hw}-${x.t.rec.hl}`, num: true },
+    { k: 'l10', l: '直近10', h: x => `${x.t.rec.l10.filter(v => v === 1).length}-${x.t.rec.l10.filter(v => v === 0).length}`, num: true },
+    { k: 'st', l: '連続', h: x => x.t.rec.strk > 0 ? x.t.rec.strk + '連勝' : x.t.rec.strk < 0 ? (-x.t.rec.strk) + '連敗' : '' },
+    { k: 'att', l: '平均観客', h: x => x.t.att && x.t.att.g ? comma(x.t.att.tot / x.t.att.g) : '―', num: true }
+  ];
+  const lgHtml = lg => {
+    const divs = [0, 1, 2].map(d => panel(`${LEAGUES[lg]} ${LG.divs[d]}`, table('stm' + lg + d, cols('stm' + lg + d), grpStandings(lg * 3 + d), { rowCls: x => (x.t.id === ut ? 'me' : '') + (x.rank === 1 ? ' div1' : '') }), { flush: true })).join('');
+    const wc = wildCard(lg);
+    return divs + panel(`${LEAGUES[lg]} ワイルドカード`, table('stw' + lg, cols('stw' + lg, true), wc, { rowCls: x => (x.t.id === ut ? 'me' : '') + (x.rank === 3 ? ' wc-cut' : '') }), { flush: true });
+  };
+  const lgSel = +(getTab('stLg', String(T.league)));
+  const vs = G.teams.filter(t => t.id !== ut && (t.league === T.league || (T.rec.vs[t.id] && T.rec.vs[t.id][0] + T.rec.vs[t.id][1] > 0))).map(t => { const v = T.rec.vs[t.id] || [0, 0, 0]; return `<tr><td>${tMark(t.id)}</td><td class="num">${v[0]}勝${v[1]}敗</td></tr>`; }).join('');
+  return `<h1 class="h1">順位表</h1><p class="lead">各リーグの地区1位3球団と、それ以外で勝率の高い3球団（ワイルドカード）がポストシーズンへ。上位2シードはワイルドカードシリーズが免除され、勝ち抜いた2球団がワールドシリーズで頂点を争います。</p>
+  ${G.post ? postBracket() : ''}
+  <div class="row" style="margin-bottom:12px">${seg('stLgSel', [['0', LEAGUES[0]], ['1', LEAGUES[1]]], lgSel)}</div>
+  <div class="stack">${lgHtml(lgSel)}
+  ${panel('対戦成績（' + esc(tShort(ut)) + '）', `<table class="t compact"><tbody>${vs}</tbody></table>`)}</div>`;
+}
+ACT.stLgSel = el => { UI.tab.stLg = el.dataset.v; render(); };
+function postBracketMLB() {
+  const P = G.post; const ser = (k, lg) => P.series.filter(s => s.kind === k && (lg == null || s.lg === lg));
+  const sline = s => { if (!s) return ''; const st = s.winner == null ? (s.games.length ? '進行中' : '予定') : '勝ち抜け：' + esc(tShort(s.winner)); return `<div class="lot-row ${s.winner != null && isUser(s.winner) ? 'win' : ''}"><div style="flex:1">${tMark(s.hi)} <span class="num">${s.w[0]}</span> - <span class="num">${s.w[1]}</span> ${tMark(s.lo)}</div><span class="small muted">${st}</span>${s.games.length ? s.games.map(g => g.id != null && G.boxes[g.id] ? `<button class="btn xs" data-a="box" data-id="${g.id}">${g.as}-${g.hs}</button>` : '').join('') : ''}</div>`; };
+  const col = (k, n, when) => `<div><h4 style="margin:0 0 6px">${n}</h4>${[0, 1].map(lg => ser(k, lg).map(sline).join('')).join('') || `<span class="muted small">${when}</span>`}</div>`;
+  const seeds = [0, 1].map(lg => `<div class="small"><b>${LEAGUES[lg]}</b>　${P.seeds[lg].map((id, i) => `${i + 1}.${esc(tShort(id))}`).join('　')}</div>`).join('');
+  return panel('ポストシーズン', `${seeds}<div class="grid g4" style="margin-top:10px">
+    ${col('wc', 'ワイルドカードシリーズ（3試合）', '10月第1週')}${col('ds', '地区シリーズ（5試合）', '10月第2週')}${col('lcs', 'リーグ優勝決定シリーズ（7試合）', '10月第3週')}
+    <div><h4 style="margin:0 0 6px">ワールドシリーズ（7試合）</h4>${ser('ws').map(sline).join('') || '<span class="muted small">10月第4週</span>'}${P.champ != null ? `<p><b>ワールドチャンピオン：${tMark(P.champ, true)}</b>${P.mvp != null && P_(P.mvp) ? `<br><span class="small">シリーズMVP ${pLinkId(P.mvp)}</span>` : ''}</p>` : ''}</div>
+  </div>`, { cls: 'hl' });
 }
